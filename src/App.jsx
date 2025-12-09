@@ -2,181 +2,154 @@ import { useState } from 'react';
 import * as mammoth from 'mammoth';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+  AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 
 // ============================================
-// PARSER MEJORADO PARA INFORMES DRAI
+// PARSER v3 - CORREGIDO PARA ESTRUCTURA EXACTA
 // ============================================
 const parseInformeDRAI = (htmlContent, weekNumber) => {
-  // Limpiar HTML y obtener texto plano
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlContent, 'text/html');
   const text = doc.body.textContent || '';
   const html = htmlContent;
   
-  // Función auxiliar para extraer números con múltiples patrones
-  const extractNumber = (patterns, defaultVal = 0) => {
-    for (const pattern of patterns) {
-      const match = text.match(pattern) || html.match(pattern);
-      if (match) {
-        const num = parseInt(match[1]) || parseInt(match[2]);
-        if (num && num > 0) return num;
-      }
-    }
-    return defaultVal;
-  };
-
   // ============================================
   // 1. APOYO LOGÍSTICO Y VIDEOCONFERENCIA
   // ============================================
   
   // Videoconferencias: "Se da soporte y asistencia a 60 videoconferencias"
-  const videoconferencias = extractNumber([
-    /asistencia a\s*(\d+)\s*videoconferencias/i,
-    /soporte.*?(\d+)\s*videoconferencias/i,
-    /(\d+)\s*videoconferencias.*sustentaciones/i
-  ]);
+  let videoconferencias = 0;
+  const videoMatch = text.match(/asistencia a\s*(\d+)\s*videoconferencias/i);
+  if (videoMatch) videoconferencias = parseInt(videoMatch[1]);
   
   // Streamings: "Se realizan 1 transmisiones de streaming"
-  const streamings = extractNumber([
-    /Se realizan?\s*(\d+)\s*transmisiones?\s*de\s*streaming/i,
-    /(\d+)\s*transmisiones?\s*de\s*streaming/i
-  ]);
+  let streamings = 0;
+  const streamMatch = text.match(/Se realizan?\s*(\d+)\s*transmisiones?\s*de\s*streaming/i);
+  if (streamMatch) streamings = parseInt(streamMatch[1]);
   
   // Grabaciones: "Se apoyan 3 grabaciones"
-  const grabaciones = extractNumber([
-    /Se apoyan?\s*(\d+)\s*grabaciones/i,
-    /apoyan?\s*(\d+)\s*grabaciones/i
-  ]);
+  let grabaciones = 0;
+  const grabMatch = text.match(/Se apoyan?\s*(\d+)\s*grabaciones/i);
+  if (grabMatch) grabaciones = parseInt(grabMatch[1]);
   
-  // Solicitudes de videoconferencia: "Se reciben 63 solicitudes"
-  const solicitudesVideoconf = extractNumber([
-    /Se reciben\s*(\d+)\s*solicitudes/i,
-    /reciben\s*(\d+)\s*solicitudes.*videoconferencia/i
-  ]);
+  // Solicitudes: "Se reciben 63 solicitudes"
+  let solicitudesVideoconf = 0;
+  const solicMatch = text.match(/Se reciben\s*(\d+)\s*solicitudes/i);
+  if (solicMatch) solicitudesVideoconf = parseInt(solicMatch[1]);
 
   // ============================================
-  // 2. GESTIÓN DE SISTEMAS DE INFORMACIÓN
+  // 2. GESTIÓN DE SISTEMAS - Proyectos activos
   // ============================================
-  
-  // Contar proyectos activos mencionados
   const proyectosActivos = [
     /praxis/i, /portafolio/i, /júpiter|jupiter/i, /sigac/i, 
-    /concurso.*men/i, /concurso.*cgr/i, /salas info/i
+    /concurso.*men/i, /cgr/i, /salas info/i
   ].filter(p => p.test(text)).length;
 
   // ============================================
   // 3. SOPORTE TELEMÁTICO
   // ============================================
   
-  // Equipos configurados: contar instalaciones de S.O, mantenimientos, etc.
-  const equiposInstalacionSO = (text.match(/instalación de S\.O|instalación de.*W11|instalación de.*Windows/gi) || []).length;
-  const equiposMantenimiento = (text.match(/mantenimiento.*equipo|mantenimiento correctivo|mantenimiento lógico/gi) || []).length;
-  const equiposConfigurados = Math.max(equiposInstalacionSO + equiposMantenimiento, 
-    extractNumber([/instalación.*?(\d+)\s*equipos/i, /(\d+)\s*equipos.*instalación/i]));
+  // Contar instalaciones de S.O y mantenimientos
+  const instalacionesSO = (text.match(/instalación de S\.O|instalación de.*W11|Se realiza instalación/gi) || []).length;
+  const mantenimientos = (text.match(/mantenimiento correctivo|mantenimiento lógico/gi) || []).length;
+  const equiposConfigurados = instalacionesSO + mantenimientos;
   
-  // Reservas Puntuales Agendadas
-  const reservasPuntuales = extractNumber([
-    /Reservas Puntuales.*?(\d+)/i,
-    /Reservas Puntuales Agendadas.*?(\d+)/i
-  ]);
+  // Reservas Puntuales: "Reservas Puntuales Agendadas: 4."
+  let reservasPuntuales = 0;
+  const reservasMatch = text.match(/Reservas Puntuales[^:]*:\s*(\d+)/i);
+  if (reservasMatch) reservasPuntuales = parseInt(reservasMatch[1]);
   
-  // Activación de Licencias
-  const activacionesLicencia = extractNumber([
-    /Activación De Licencia.*?(\d+)/i,
-    /Activación.*Licencia.*?(\d+)/i
-  ]);
+  // Activación de Licencias: "Activación De Licencia: 2."
+  let activacionesLicencia = 0;
+  const licenciasMatch = text.match(/Activación[^:]*Licencia[^:]*:\s*(\d+)/i);
+  if (licenciasMatch) activacionesLicencia = parseInt(licenciasMatch[1]);
   
-  // Atención vía Correo
-  const atencionCorreo = extractNumber([
-    /Atención Solicitud Vía Correo.*?(\d+)/i,
-    /Vía Correo.*?(\d+)/i,
-    /correo.*?(\d+)\./i
-  ]);
-
-  // ============================================
-  // 4. SOPORTE INGENI@ - REGIONES
-  // ============================================
-  const correosRespondidos = extractNumber([
-    /Respuesta.*?(\d+)/i,
-    /correos.*respondidos.*?(\d+)/i
-  ]);
+  // Atención vía Correo: "Atención Solicitud Vía Correo: 17."
+  let atencionCorreo = 0;
+  const correoMatch = text.match(/Atención[^:]*(?:Vía|Via)\s*Correo[^:]*:\s*(\d+)/i);
+  if (correoMatch) atencionCorreo = parseInt(correoMatch[1]);
 
   // ============================================
   // 5. CENDOI - GESTIÓN DOCUMENTAL
   // ============================================
   
-  // Usuarios CENDOI: Buscar en la tabla específica
-  // Formato: "Semana del 1 al 6 de diciembre                                    283"
+  // Usuarios CENDOI - Buscar el patrón específico:
+  // "Semana del X al Y de MES                    NUMERO"
   let usuariosCENDOI = 0;
   
-  // Patrón 1: Buscar número después de "Semana del X al Y de mes"
-  const cendoiMatch1 = text.match(/Semana del \d+.*?(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+(\d{2,4})/i);
-  if (cendoiMatch1) usuariosCENDOI = parseInt(cendoiMatch1[1]);
+  // Extraer solo la sección CENDOI
+  const cendoiStart = text.indexOf('Gestión Documental CENDOI');
+  const cendoiEnd = text.indexOf('Unidad de Gestión de Proyectos');
   
-  // Patrón 2: Buscar "Cantidad total de usuarios" seguido de número
-  if (!usuariosCENDOI) {
-    const cendoiMatch2 = text.match(/Cantidad total de usuarios\s+(\d+)/i);
-    if (cendoiMatch2) usuariosCENDOI = parseInt(cendoiMatch2[1]);
+  if (cendoiStart > -1 && cendoiEnd > -1) {
+    const cendoiText = text.substring(cendoiStart, cendoiEnd);
+    
+    // Buscar: "Semana del X al Y de mes    NUMERO"
+    // El número de usuarios está después del nombre del mes
+    const usuariosMatch = cendoiText.match(/(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+(\d{2,3})/i);
+    if (usuariosMatch) {
+      usuariosCENDOI = parseInt(usuariosMatch[1]);
+    }
   }
   
-  // Patrón 3: Buscar número de 3 dígitos después de CENDOI y antes de "Libros"
-  if (!usuariosCENDOI) {
-    const cendoiSection = text.match(/CENDOI[\s\S]*?(\d{3})[\s\S]*?Libros/i);
-    if (cendoiSection) usuariosCENDOI = parseInt(cendoiSection[1]);
+  // Fallback: buscar "Cantidad total de usuarios" seguido de número de 3 dígitos
+  if (!usuariosCENDOI || usuariosCENDOI > 1000) {
+    const fallbackMatch = text.match(/diciembre\s+(\d{3})\s/i) || 
+                          text.match(/noviembre\s+(\d{3})\s/i) ||
+                          text.match(/total de usuarios[^\d]*(\d{3})/i);
+    if (fallbackMatch) {
+      usuariosCENDOI = parseInt(fallbackMatch[1]);
+    }
   }
   
-  // PCs prestados
-  const pcs = extractNumber([
-    /PC\s+(\d+)/i,
-    /\b(\d{2,3})\s*<\/td>.*?Diademas/i
-  ]) || extractNumber([/(\d{2})\s+\d{2,3}\s+\d{2}/]);
+  // Libros, PC, Diademas - están en una tabla dentro de CENDOI
+  // Formato: "1    77    88    80 usuarios"
+  let libros = 0, pcs = 0, diademas = 0;
   
-  // Diademas
-  const diademas = extractNumber([
-    /Diademas.*?(\d+)/i,
-    /(\d{2,3}).*?Diademas/i
-  ]);
-  
-  // Libros
-  const libros = extractNumber([/Libros.*?(\d+)/i]);
+  if (cendoiStart > -1 && cendoiEnd > -1) {
+    const cendoiText = text.substring(cendoiStart, cendoiEnd);
+    
+    // Buscar la fila de la tabla con los números
+    // El patrón es: número pequeño (libros), número ~70-100 (PC), número ~80-120 (diademas)
+    const tablaMatch = cendoiText.match(/(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})\s+(\d{2,3})/);
+    if (tablaMatch) {
+      libros = parseInt(tablaMatch[1]);
+      pcs = parseInt(tablaMatch[2]);
+      diademas = parseInt(tablaMatch[3]);
+    }
+  }
 
   // ============================================
-  // 6. UNIDAD DE GESTIÓN DE PROYECTOS
+  // 6. UGP - Reuniones
   // ============================================
-  const reunionesUGP = (text.match(/reunión|reuniones/gi) || []).length;
+  const reunionesUGP = (text.match(/(?:Se realiza|Se realizó) reunión/gi) || []).length;
 
   // ============================================
   // 7. INGENI@
   // ============================================
   
-  // Matrículas Talento Tech
-  const talentoTechMatriculas = extractNumber([
-    /Matrícula.*?Talento Tech.*?(\d+)/i,
-    /Talento Tech.*?(\d+)/i,
-    /pruebas de inicio.*?(\d+)/i,
-    /matrícula.*?(\d+)/i
-  ]);
+  // Matrículas/pruebas Talento Tech: "pruebas de inicio de usuarios del proyecto Talento Tech-10"
+  let talentoTechMatriculas = 0;
+  const talentoMatch = text.match(/(?:Talento Tech|pruebas de inicio)[^\d]*(\d+)/i);
+  if (talentoMatch) talentoTechMatriculas = parseInt(talentoMatch[1]);
   
-  // PQRS Atendidas
-  const pqrsAtendidas = extractNumber([
-    /PQRS.*?(\d+)/i,
-    /Respuesta.*?PQRS.*?(\d+)/i
-  ]);
+  // PQRS
+  let pqrsAtendidas = 0;
+  const pqrsMatch = text.match(/Respuesta[^P]*PQRS[^\d]*(\d+)/i) || text.match(/PQRS[^\d]*(\d+)/i);
+  if (pqrsMatch) pqrsAtendidas = parseInt(pqrsMatch[1]);
 
   // ============================================
   // 8. PRODUCCIÓN
   // ============================================
-  const disenosRealizados = (text.match(/[Dd]iseño/g) || []).length;
-  const cursosProducidos = (text.match(/[Cc]urso/g) || []).length;
+  const disenosRealizados = (text.match(/[Dd]iseño de|[Dd]iseño y/g) || []).length;
 
   // ============================================
   // 9. GESTIÓN ADMINISTRATIVA
   // ============================================
-  const comprasGestionadas = (text.match(/[Cc]ompra|[Ss]olicitud de [Cc]ompra/g) || []).length;
-  const contrataciones = (text.match(/[Cc]ontrat|[Ee]xoneración|[Tt]erceros/g) || []).length;
-  const transferencias = (text.match(/[Tt]ransferencia/g) || []).length;
+  const comprasGestionadas = (text.match(/[Ss]olicitud de [Cc]ompra|[Ss]olicitud [Cc]ompra/g) || []).length;
+  const contrataciones = (text.match(/[Ee]xoneración|[Cc]reación [Tt]erceros|contratos? (?:cátedra|firmados?)/gi) || []).length;
+  const transferencias = (text.match(/[Ss]olicitud.*[Tt]ransferencia|[Tt]ransferencia para/gi) || []).length;
 
   // ============================================
   // RETORNO DE MÉTRICAS
@@ -186,44 +159,40 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
     fecha: `Semana ${weekNumber}`,
     
     // Área 1: Videoconferencia
-    videoconferencias: videoconferencias || 0,
-    streamings: streamings || 0,
-    grabaciones: grabaciones || 0,
-    solicitudesVideoconf: solicitudesVideoconf || 0,
+    videoconferencias,
+    streamings,
+    grabaciones,
+    solicitudesVideoconf,
     
     // Área 2: Sistemas
-    proyectosActivos: proyectosActivos || 0,
+    proyectosActivos,
     
     // Área 3: Soporte Telemático
-    equiposConfigurados: equiposConfigurados || 0,
-    reservasPuntuales: reservasPuntuales || 0,
-    activacionesLicencia: activacionesLicencia || 0,
-    atencionCorreo: atencionCorreo || 0,
-    
-    // Área 4: Soporte Regiones
-    correosRespondidos: correosRespondidos || 0,
+    equiposConfigurados,
+    reservasPuntuales,
+    activacionesLicencia,
+    atencionCorreo,
     
     // Área 5: CENDOI
-    usuariosCENDOI: usuariosCENDOI || 0,
-    libros: libros || 0,
-    pcs: pcs || 0,
-    diademas: diademas || 0,
+    usuariosCENDOI,
+    libros,
+    pcs,
+    diademas,
     
     // Área 6: UGP
-    reunionesUGP: reunionesUGP || 0,
+    reunionesUGP,
     
     // Área 7: Ingeni@
-    talentoTechMatriculas: talentoTechMatriculas || 0,
-    pqrsAtendidas: pqrsAtendidas || 0,
+    talentoTechMatriculas,
+    pqrsAtendidas,
     
     // Área 8: Producción
-    disenosRealizados: disenosRealizados || 0,
-    cursosProducidos: cursosProducidos || 0,
+    disenosRealizados,
     
     // Área 9: Administrativa
-    comprasGestionadas: comprasGestionadas || 0,
-    contrataciones: contrataciones || 0,
-    transferencias: transferencias || 0
+    comprasGestionadas,
+    contrataciones,
+    transferencias
   };
 };
 
@@ -234,16 +203,11 @@ const COLORS = {
   primary: '#1B5E20',
   secondary: '#FFC107',
   accent: '#2E7D32',
-  dark: '#0D3311',
-  light: '#E8F5E9',
-  white: '#FFFFFF',
-  gray: '#607D8B',
   success: '#34A853',
   warning: '#FF9800',
   error: '#EA4335',
   purple: '#9C27B0',
-  pink: '#E91E63',
-  chartColors: ['#1B5E20', '#FFC107', '#2E7D32', '#4CAF50', '#8BC34A', '#CDDC39', '#FF9800', '#FF5722', '#795548']
+  pink: '#E91E63'
 };
 
 // ============================================
@@ -251,7 +215,7 @@ const COLORS = {
 // ============================================
 const MetricCard = ({ title, value, change, icon, color = COLORS.primary }) => {
   const isPositive = change >= 0;
-  const hasChange = change !== undefined && change !== null && !isNaN(change);
+  const hasChange = change !== undefined && change !== null && !isNaN(change) && isFinite(change);
   
   return (
     <div style={{
@@ -260,8 +224,6 @@ const MetricCard = ({ title, value, change, icon, color = COLORS.primary }) => {
       padding: '20px',
       boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
       borderLeft: `4px solid ${color}`,
-      transition: 'all 0.3s ease',
-      cursor: 'default'
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
         <div style={{
@@ -284,7 +246,7 @@ const MetricCard = ({ title, value, change, icon, color = COLORS.primary }) => {
             fontWeight: 800, 
             color: '#1a1a1a', 
             lineHeight: 1,
-            fontFamily: "'JetBrains Mono', monospace"
+            fontFamily: "monospace"
           }}>
             {value}
           </span>
@@ -292,12 +254,9 @@ const MetricCard = ({ title, value, change, icon, color = COLORS.primary }) => {
             <span style={{ 
               fontSize: '12px', 
               fontWeight: 600, 
-              color: isPositive ? COLORS.success : COLORS.error,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
+              color: isPositive ? COLORS.success : COLORS.error
             }}>
-              {isPositive ? '↑' : '↓'} {Math.abs(change)}% vs semana anterior
+              {isPositive ? '↑' : '↓'} {Math.abs(change)}% vs anterior
             </span>
           )}
         </div>
@@ -315,13 +274,11 @@ export default function DRAIDashboard() {
   const [previousWeek, setPreviousWeek] = useState(null);
   const [view, setView] = useState('semanal');
   const [loading, setLoading] = useState(false);
-  const [debugInfo, setDebugInfo] = useState('');
 
   // Cargar archivo .docx
   const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     setLoading(true);
-    setDebugInfo('Procesando archivos...');
     
     const newInformes = [];
     
@@ -330,23 +287,21 @@ export default function DRAIDashboard() {
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
         
-        // Extraer número de semana del nombre del archivo
         const weekMatch = file.name.match(/(\d+)/);
         const weekNumber = weekMatch ? parseInt(weekMatch[1]) : informes.length + newInformes.length + 1;
         
         const metrics = parseInformeDRAI(result.value, weekNumber);
         newInformes.push(metrics);
         
-        console.log(`Procesado: ${file.name}`, metrics);
+        console.log(`✅ Procesado: ${file.name}`, metrics);
       } catch (error) {
-        console.error('Error procesando archivo:', file.name, error);
-        setDebugInfo(`Error en ${file.name}: ${error.message}`);
+        console.error('❌ Error:', file.name, error);
       }
     }
     
     const allInformes = [...informes, ...newInformes].sort((a, b) => a.semana - b.semana);
     
-    // Eliminar duplicados por número de semana
+    // Eliminar duplicados
     const uniqueInformes = allInformes.reduce((acc, curr) => {
       const existing = acc.find(i => i.semana === curr.semana);
       if (!existing) acc.push(curr);
@@ -362,17 +317,14 @@ export default function DRAIDashboard() {
       }
     }
     
-    setDebugInfo(`${uniqueInformes.length} informes cargados`);
     setLoading(false);
   };
 
-  // Calcular cambio porcentual
   const calcChange = (current, previous) => {
     if (!previous || previous === 0) return null;
     return Math.round(((current - previous) / previous) * 100);
   };
 
-  // Datos para gráfico de barras comparativo
   const getAreaChartData = () => {
     if (!currentWeek) return [];
     return [
@@ -385,29 +337,18 @@ export default function DRAIDashboard() {
     ];
   };
 
-  // Datos para radar de carga laboral
   const getRadarData = () => {
     if (!currentWeek) return [];
-    const maxValues = {
-      videoconferencias: 80,
-      equiposConfigurados: 20,
-      usuariosCENDOI: 500,
-      talentoTechMatriculas: 100,
-      disenosRealizados: 15,
-      comprasGestionadas: 20
-    };
-    
     return [
-      { area: 'Videoconferencias', value: Math.min((currentWeek.videoconferencias / maxValues.videoconferencias) * 100, 100) },
-      { area: 'Soporte Técnico', value: Math.min((currentWeek.equiposConfigurados / maxValues.equiposConfigurados) * 100, 100) },
-      { area: 'CENDOI', value: Math.min((currentWeek.usuariosCENDOI / maxValues.usuariosCENDOI) * 100, 100) },
-      { area: 'Ingeni@', value: Math.min((currentWeek.talentoTechMatriculas / maxValues.talentoTechMatriculas) * 100, 100) },
-      { area: 'Producción', value: Math.min((currentWeek.disenosRealizados / maxValues.disenosRealizados) * 100, 100) },
-      { area: 'Administrativa', value: Math.min((currentWeek.comprasGestionadas / maxValues.comprasGestionadas) * 100, 100) },
+      { area: 'Videoconferencias', value: Math.min((currentWeek.videoconferencias / 80) * 100, 100) },
+      { area: 'Soporte Técnico', value: Math.min((currentWeek.equiposConfigurados / 15) * 100, 100) },
+      { area: 'CENDOI', value: Math.min((currentWeek.usuariosCENDOI / 400) * 100, 100) },
+      { area: 'Ingeni@', value: Math.min((currentWeek.talentoTechMatriculas / 80) * 100, 100) },
+      { area: 'Producción', value: Math.min((currentWeek.disenosRealizados / 10) * 100, 100) },
+      { area: 'Administrativa', value: Math.min((currentWeek.comprasGestionadas / 15) * 100, 100) },
     ];
   };
 
-  // Tendencia anual
   const getTrendData = () => {
     return informes.map(inf => ({
       semana: `S${inf.semana}`,
@@ -417,76 +358,85 @@ export default function DRAIDashboard() {
     }));
   };
 
-  // Exportar como HTML
   const exportHTML = () => {
-    const content = document.getElementById('dashboard-content');
-    if (!content) return;
+    if (!currentWeek) return;
     
-    const html = `
-<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Informe DRAI - Semana ${currentWeek?.semana || ''}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>Informe DRAI - Semana ${currentWeek.semana}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f5f5f5; padding: 20px; color: #1a1a1a; }
-    .header { background: linear-gradient(135deg, #1B5E20, #2E7D32); color: white; padding: 30px; border-radius: 16px; margin-bottom: 24px; }
-    .header h1 { font-size: 28px; font-weight: 800; }
-    .header p { opacity: 0.9; margin-top: 4px; }
-    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .metric-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid #1B5E20; }
-    .metric-value { font-size: 36px; font-weight: 800; color: #1B5E20; }
-    .metric-title { color: #666; font-size: 14px; margin-bottom: 8px; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f5f5f5; padding: 24px; color: #1a1a1a; }
+    .header { background: linear-gradient(135deg, #1B5E20, #2E7D32); color: white; padding: 32px; border-radius: 16px; margin-bottom: 24px; }
+    .header h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+    .header p { opacity: 0.9; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid #1B5E20; }
+    .card-title { font-size: 13px; color: #666; margin-bottom: 8px; }
+    .card-value { font-size: 32px; font-weight: 800; color: #1B5E20; }
     .section { background: white; padding: 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .section h3 { font-size: 18px; margin-bottom: 16px; color: #1B5E20; }
+    .section h3 { font-size: 16px; color: #1B5E20; margin-bottom: 16px; border-bottom: 2px solid #E8F5E9; padding-bottom: 12px; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .row:last-child { border-bottom: none; }
+    footer { text-align: center; color: #888; margin-top: 32px; font-size: 12px; }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>📊 DRAI Dashboard - Informe Ejecutivo</h1>
-    <p>Semana ${currentWeek?.semana || ''} | Departamento de Recursos de Apoyo e Informática</p>
+    <h1>📊 Informe Ejecutivo DRAI - Semana ${currentWeek.semana}</h1>
+    <p>Departamento de Recursos de Apoyo e Informática</p>
     <p>Facultad de Ingeniería • Universidad de Antioquia</p>
   </div>
   
-  <div class="metrics-grid">
-    <div class="metric-card">
-      <div class="metric-title">🎥 Videoconferencias</div>
-      <div class="metric-value">${currentWeek?.videoconferencias || 0}</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">🎥 Videoconferencias</div>
+      <div class="card-value">${currentWeek.videoconferencias}</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-title">📡 Streamings</div>
-      <div class="metric-value">${currentWeek?.streamings || 0}</div>
+    <div class="card">
+      <div class="card-title">📡 Streamings</div>
+      <div class="card-value">${currentWeek.streamings}</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-title">👥 Usuarios CENDOI</div>
-      <div class="metric-value">${currentWeek?.usuariosCENDOI || 0}</div>
+    <div class="card">
+      <div class="card-title">👥 Usuarios CENDOI</div>
+      <div class="card-value">${currentWeek.usuariosCENDOI}</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-title">💻 Equipos Configurados</div>
-      <div class="metric-value">${currentWeek?.equiposConfigurados || 0}</div>
+    <div class="card">
+      <div class="card-title">💻 Equipos Configurados</div>
+      <div class="card-value">${currentWeek.equiposConfigurados}</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-title">🎓 Matrículas Talento Tech</div>
-      <div class="metric-value">${currentWeek?.talentoTechMatriculas || 0}</div>
+    <div class="card">
+      <div class="card-title">🎓 Talento Tech</div>
+      <div class="card-value">${currentWeek.talentoTechMatriculas}</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-title">🎨 Diseños Realizados</div>
-      <div class="metric-value">${currentWeek?.disenosRealizados || 0}</div>
+    <div class="card">
+      <div class="card-title">🎨 Diseños</div>
+      <div class="card-value">${currentWeek.disenosRealizados}</div>
     </div>
   </div>
   
   <div class="section">
-    <h3>📋 Resumen por Áreas</h3>
-    <p><strong>Videoconferencia:</strong> ${currentWeek?.videoconferencias || 0} videoconferencias, ${currentWeek?.streamings || 0} streamings, ${currentWeek?.grabaciones || 0} grabaciones</p>
-    <p><strong>Soporte Telemático:</strong> ${currentWeek?.equiposConfigurados || 0} equipos, ${currentWeek?.reservasPuntuales || 0} reservas, ${currentWeek?.atencionCorreo || 0} correos</p>
-    <p><strong>CENDOI:</strong> ${currentWeek?.usuariosCENDOI || 0} usuarios atendidos</p>
-    <p><strong>Gestión Administrativa:</strong> ${currentWeek?.comprasGestionadas || 0} compras, ${currentWeek?.contrataciones || 0} contrataciones</p>
+    <h3>📋 Detalle por Áreas</h3>
+    <div class="row"><span>Videoconferencias realizadas</span><strong>${currentWeek.videoconferencias}</strong></div>
+    <div class="row"><span>Transmisiones streaming</span><strong>${currentWeek.streamings}</strong></div>
+    <div class="row"><span>Grabaciones</span><strong>${currentWeek.grabaciones}</strong></div>
+    <div class="row"><span>Solicitudes procesadas</span><strong>${currentWeek.solicitudesVideoconf}</strong></div>
+    <div class="row"><span>Equipos configurados/mantenimiento</span><strong>${currentWeek.equiposConfigurados}</strong></div>
+    <div class="row"><span>Reservas puntuales</span><strong>${currentWeek.reservasPuntuales}</strong></div>
+    <div class="row"><span>Activaciones de licencia</span><strong>${currentWeek.activacionesLicencia}</strong></div>
+    <div class="row"><span>Atención vía correo</span><strong>${currentWeek.atencionCorreo}</strong></div>
+    <div class="row"><span>Usuarios CENDOI atendidos</span><strong>${currentWeek.usuariosCENDOI}</strong></div>
+    <div class="row"><span>PCs prestados</span><strong>${currentWeek.pcs}</strong></div>
+    <div class="row"><span>Diademas prestadas</span><strong>${currentWeek.diademas}</strong></div>
+    <div class="row"><span>Compras gestionadas</span><strong>${currentWeek.comprasGestionadas}</strong></div>
+    <div class="row"><span>Procesos de contratación</span><strong>${currentWeek.contrataciones}</strong></div>
   </div>
   
-  <footer style="text-align: center; color: #888; margin-top: 24px; font-size: 12px;">
-    Generado por DRAI Dashboard © 2025 | Universidad de Antioquia
+  <footer>
+    Generado por DRAI Dashboard © 2025 | Facultad de Ingeniería - Universidad de Antioquia
   </footer>
 </body>
 </html>`;
@@ -495,7 +445,7 @@ export default function DRAIDashboard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Informe_DRAI_Semana_${currentWeek?.semana || 'X'}.html`;
+    a.download = `Informe_DRAI_Semana_${currentWeek.semana}.html`;
     a.click();
   };
 
@@ -506,7 +456,7 @@ export default function DRAIDashboard() {
     <div style={{ 
       minHeight: '100vh', 
       background: '#F8FAF8',
-      fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
+      fontFamily: "'Segoe UI', -apple-system, sans-serif"
     }}>
       {/* Header */}
       <header style={{
@@ -535,14 +485,13 @@ export default function DRAIDashboard() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '28px',
-              backdropFilter: 'blur(10px)'
+              fontSize: '28px'
             }}>📊</div>
             <div>
-              <h1 style={{ fontSize: '28px', fontWeight: 800, color: 'white', margin: 0, letterSpacing: '-0.5px' }}>
+              <h1 style={{ fontSize: '28px', fontWeight: 800, color: 'white', margin: 0 }}>
                 DRAI Dashboard
               </h1>
-              <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)', margin: 0, fontWeight: 500 }}>
+              <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.9)', margin: 0 }}>
                 Departamento de Recursos de Apoyo e Informática
               </p>
               <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>
@@ -551,14 +500,7 @@ export default function DRAIDashboard() {
             </div>
           </div>
           
-          <div style={{ 
-            display: 'flex', 
-            gap: '8px', 
-            background: 'rgba(255,255,255,0.15)', 
-            padding: '4px', 
-            borderRadius: '14px',
-            backdropFilter: 'blur(10px)'
-          }}>
+          <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.15)', padding: '4px', borderRadius: '14px' }}>
             <button
               onClick={() => setView('semanal')}
               style={{
@@ -570,8 +512,7 @@ export default function DRAIDashboard() {
                 fontWeight: 600,
                 cursor: 'pointer',
                 fontSize: '14px',
-                fontFamily: 'inherit',
-                transition: 'all 0.2s ease'
+                fontFamily: 'inherit'
               }}
             >📅 Semanal</button>
             <button
@@ -585,8 +526,7 @@ export default function DRAIDashboard() {
                 fontWeight: 600,
                 cursor: 'pointer',
                 fontSize: '14px',
-                fontFamily: 'inherit',
-                transition: 'all 0.2s ease'
+                fontFamily: 'inherit'
               }}
             >📈 Anual</button>
           </div>
@@ -610,8 +550,7 @@ export default function DRAIDashboard() {
           border: '2px dashed #E0E0E0',
           borderRadius: '16px',
           padding: '24px',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
+          cursor: 'pointer'
         }}>
           <input 
             type="file" 
@@ -644,11 +583,7 @@ export default function DRAIDashboard() {
               fontWeight: 600,
               fontSize: '14px',
               cursor: 'pointer',
-              fontFamily: 'inherit',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s ease'
+              fontFamily: 'inherit'
             }}>
               📧 Exportar HTML para correo
             </button>
@@ -661,10 +596,7 @@ export default function DRAIDashboard() {
               fontWeight: 600,
               fontSize: '14px',
               cursor: 'pointer',
-              fontFamily: 'inherit',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
+              fontFamily: 'inherit'
             }}>
               📄 Exportar PDF
             </button>
@@ -677,7 +609,6 @@ export default function DRAIDashboard() {
         {/* Vista Semanal */}
         {currentWeek && view === 'semanal' && (
           <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 32px 32px' }}>
-            {/* Week Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>
                 📊 Informe Ejecutivo – Semana {currentWeek.semana}
@@ -696,87 +627,31 @@ export default function DRAIDashboard() {
               )}
             </div>
 
-            {/* Main Metrics Grid */}
+            {/* Main Metrics */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
               gap: '16px',
               marginBottom: '24px'
             }}>
-              <MetricCard 
-                title="Videoconferencias" 
-                value={currentWeek.videoconferencias}
-                change={calcChange(currentWeek.videoconferencias, previousWeek?.videoconferencias)}
-                icon="🎥"
-                color={COLORS.primary}
-              />
-              <MetricCard 
-                title="Streamings" 
-                value={currentWeek.streamings}
-                change={calcChange(currentWeek.streamings, previousWeek?.streamings)}
-                icon="📡"
-                color={COLORS.secondary}
-              />
-              <MetricCard 
-                title="Usuarios CENDOI" 
-                value={currentWeek.usuariosCENDOI}
-                change={calcChange(currentWeek.usuariosCENDOI, previousWeek?.usuariosCENDOI)}
-                icon="👥"
-                color={COLORS.accent}
-              />
-              <MetricCard 
-                title="Equipos Configurados" 
-                value={currentWeek.equiposConfigurados}
-                change={calcChange(currentWeek.equiposConfigurados, previousWeek?.equiposConfigurados)}
-                icon="💻"
-                color={COLORS.warning}
-              />
-              <MetricCard 
-                title="Matrículas Talento Tech" 
-                value={currentWeek.talentoTechMatriculas}
-                change={calcChange(currentWeek.talentoTechMatriculas, previousWeek?.talentoTechMatriculas)}
-                icon="🎓"
-                color={COLORS.purple}
-              />
-              <MetricCard 
-                title="Diseños Realizados" 
-                value={currentWeek.disenosRealizados}
-                change={calcChange(currentWeek.disenosRealizados, previousWeek?.disenosRealizados)}
-                icon="🎨"
-                color={COLORS.pink}
-              />
+              <MetricCard title="Videoconferencias" value={currentWeek.videoconferencias} change={calcChange(currentWeek.videoconferencias, previousWeek?.videoconferencias)} icon="🎥" color={COLORS.primary} />
+              <MetricCard title="Streamings" value={currentWeek.streamings} change={calcChange(currentWeek.streamings, previousWeek?.streamings)} icon="📡" color={COLORS.secondary} />
+              <MetricCard title="Usuarios CENDOI" value={currentWeek.usuariosCENDOI} change={calcChange(currentWeek.usuariosCENDOI, previousWeek?.usuariosCENDOI)} icon="👥" color={COLORS.accent} />
+              <MetricCard title="Equipos Configurados" value={currentWeek.equiposConfigurados} change={calcChange(currentWeek.equiposConfigurados, previousWeek?.equiposConfigurados)} icon="💻" color={COLORS.warning} />
+              <MetricCard title="Talento Tech" value={currentWeek.talentoTechMatriculas} change={calcChange(currentWeek.talentoTechMatriculas, previousWeek?.talentoTechMatriculas)} icon="🎓" color={COLORS.purple} />
+              <MetricCard title="Diseños" value={currentWeek.disenosRealizados} change={calcChange(currentWeek.disenosRealizados, previousWeek?.disenosRealizados)} icon="🎨" color={COLORS.pink} />
             </div>
 
-            {/* Charts Section */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', 
-              gap: '20px',
-              marginBottom: '24px'
-            }}>
-              {/* Bar Chart */}
-              <div style={{ 
-                background: 'white', 
-                borderRadius: '16px', 
-                padding: '24px', 
-                boxShadow: '0 2px 12px rgba(0,0,0,0.08)' 
-              }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  📊 Comparativa por Área
-                </h3>
+            {/* Charts */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+              <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>📊 Comparativa por Área</h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={getAreaChartData()}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                     <XAxis dataKey="area" tick={{ fill: '#666', fontSize: 12 }} />
                     <YAxis tick={{ fill: '#666', fontSize: 12 }} />
-                    <Tooltip 
-                      contentStyle={{ 
-                        background: 'white', 
-                        border: 'none', 
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                      }} 
-                    />
+                    <Tooltip />
                     <Legend />
                     <Bar dataKey="anterior" name="Semana Anterior" fill="#E0E0E0" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="actual" name="Semana Actual" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
@@ -784,87 +659,59 @@ export default function DRAIDashboard() {
                 </ResponsiveContainer>
               </div>
 
-              {/* Radar Chart */}
-              <div style={{ 
-                background: 'white', 
-                borderRadius: '16px', 
-                padding: '24px', 
-                boxShadow: '0 2px 12px rgba(0,0,0,0.08)' 
-              }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  ⚡ Distribución de Carga Laboral
-                </h3>
+              <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>⚡ Distribución de Carga Laboral</h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <RadarChart data={getRadarData()}>
                     <PolarGrid stroke="#e0e0e0" />
                     <PolarAngleAxis dataKey="area" tick={{ fill: '#666', fontSize: 11 }} />
                     <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#999', fontSize: 10 }} />
-                    <Radar 
-                      name="Carga %" 
-                      dataKey="value" 
-                      stroke={COLORS.primary} 
-                      fill={COLORS.primary} 
-                      fillOpacity={0.5} 
-                    />
+                    <Radar name="Carga %" dataKey="value" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.5} />
                     <Tooltip />
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Detailed Sections */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-              gap: '16px' 
-            }}>
-              {/* Videoconferencias */}
+            {/* Detail Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+              {/* Videoconferencia */}
               <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
                 <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
                   🎥 Apoyo Logístico y Videoconferencia
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.videoconferencias}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Videoconferencias</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.streamings}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Streamings</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.grabaciones}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Grabaciones</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.solicitudesVideoconf}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Solicitudes</span>
-                  </div>
+                  {[
+                    { v: currentWeek.videoconferencias, l: 'Videoconferencias' },
+                    { v: currentWeek.streamings, l: 'Streamings' },
+                    { v: currentWeek.grabaciones, l: 'Grabaciones' },
+                    { v: currentWeek.solicitudesVideoconf, l: 'Solicitudes' }
+                  ].map((item, i) => (
+                    <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
+                      <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{item.v}</span>
+                      <span style={{ fontSize: '11px', color: '#888' }}>{item.l}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Soporte Telemático */}
+              {/* Soporte */}
               <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
                 <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
                   💻 Soporte Telemático
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.equiposConfigurados}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Equipos</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.reservasPuntuales}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Reservas</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.activacionesLicencia}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Licencias</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.atencionCorreo}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Correos</span>
-                  </div>
+                  {[
+                    { v: currentWeek.equiposConfigurados, l: 'Equipos' },
+                    { v: currentWeek.reservasPuntuales, l: 'Reservas' },
+                    { v: currentWeek.activacionesLicencia, l: 'Licencias' },
+                    { v: currentWeek.atencionCorreo, l: 'Correos' }
+                  ].map((item, i) => (
+                    <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
+                      <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{item.v}</span>
+                      <span style={{ fontSize: '11px', color: '#888' }}>{item.l}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -885,39 +732,35 @@ export default function DRAIDashboard() {
                   <span style={{ fontSize: '13px', opacity: 0.9 }}>Usuarios Atendidos</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                  <div style={{ textAlign: 'center', padding: '10px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '18px', fontWeight: 700, color: COLORS.primary }}>{currentWeek.pcs}</span>
-                    <span style={{ fontSize: '10px', color: '#888' }}>PCs</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '10px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '18px', fontWeight: 700, color: COLORS.primary }}>{currentWeek.diademas}</span>
-                    <span style={{ fontSize: '10px', color: '#888' }}>Diademas</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '10px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '18px', fontWeight: 700, color: COLORS.primary }}>{currentWeek.libros}</span>
-                    <span style={{ fontSize: '10px', color: '#888' }}>Libros</span>
-                  </div>
+                  {[
+                    { v: currentWeek.pcs, l: 'PCs' },
+                    { v: currentWeek.diademas, l: 'Diademas' },
+                    { v: currentWeek.libros, l: 'Libros' }
+                  ].map((item, i) => (
+                    <div key={i} style={{ textAlign: 'center', padding: '10px', background: '#f8f8f8', borderRadius: '8px' }}>
+                      <span style={{ display: 'block', fontSize: '18px', fontWeight: 700, color: COLORS.primary }}>{item.v}</span>
+                      <span style={{ fontSize: '10px', color: '#888' }}>{item.l}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Gestión Administrativa */}
+              {/* Administrativa */}
               <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
                 <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
                   📋 Gestión Administrativa
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.comprasGestionadas}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Compras</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.contrataciones}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Contrataciones</span>
-                  </div>
-                  <div style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                    <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{currentWeek.transferencias}</span>
-                    <span style={{ fontSize: '11px', color: '#888' }}>Transferencias</span>
-                  </div>
+                  {[
+                    { v: currentWeek.comprasGestionadas, l: 'Compras' },
+                    { v: currentWeek.contrataciones, l: 'Contrataciones' },
+                    { v: currentWeek.transferencias, l: 'Transferencias' }
+                  ].map((item, i) => (
+                    <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
+                      <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{item.v}</span>
+                      <span style={{ fontSize: '11px', color: '#888' }}>{item.l}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -927,34 +770,20 @@ export default function DRAIDashboard() {
         {/* Vista Anual */}
         {informes.length > 0 && view === 'anual' && (
           <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 32px 32px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>
-                📈 Consolidado Anual 2025
-              </h2>
-              <span style={{
-                background: 'linear-gradient(135deg, #FFD54F, #FFC107)',
-                color: '#1B5E20',
-                padding: '6px 14px',
-                borderRadius: '20px',
-                fontSize: '13px',
-                fontWeight: 600
-              }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>📈 Consolidado Anual 2025</h2>
+              <span style={{ background: 'linear-gradient(135deg, #FFD54F, #FFC107)', color: '#1B5E20', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 600 }}>
                 {informes.length} semanas analizadas
               </span>
             </div>
 
-            {/* Annual Summary Cards */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-              gap: '16px',
-              marginBottom: '24px'
-            }}>
+            {/* Summary */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
               {[
-                { icon: '🎥', value: informes.reduce((sum, inf) => sum + inf.videoconferencias, 0), label: 'Total Videoconferencias' },
-                { icon: '👥', value: informes.reduce((sum, inf) => sum + inf.usuariosCENDOI, 0).toLocaleString(), label: 'Usuarios CENDOI Atendidos' },
-                { icon: '💻', value: informes.reduce((sum, inf) => sum + inf.equiposConfigurados, 0), label: 'Equipos Configurados' },
-                { icon: '🎓', value: informes.reduce((sum, inf) => sum + inf.talentoTechMatriculas, 0), label: 'Matrículas Talento Tech' },
+                { icon: '🎥', value: informes.reduce((s, i) => s + i.videoconferencias, 0), label: 'Total Videoconferencias' },
+                { icon: '👥', value: informes.reduce((s, i) => s + i.usuariosCENDOI, 0).toLocaleString(), label: 'Usuarios CENDOI' },
+                { icon: '💻', value: informes.reduce((s, i) => s + i.equiposConfigurados, 0), label: 'Equipos Configurados' },
+                { icon: '🎓', value: informes.reduce((s, i) => s + i.talentoTechMatriculas, 0), label: 'Talento Tech' },
               ].map((item, i) => (
                 <div key={i} style={{
                   background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`,
@@ -962,128 +791,62 @@ export default function DRAIDashboard() {
                   padding: '24px',
                   textAlign: 'center',
                   color: 'white',
-                  boxShadow: '0 4px 16px rgba(27,94,32,0.3)',
-                  transition: 'transform 0.3s ease'
+                  boxShadow: '0 4px 16px rgba(27,94,32,0.3)'
                 }}>
                   <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>{item.icon}</span>
-                  <span style={{ fontSize: '36px', fontWeight: 800, display: 'block', fontFamily: "'JetBrains Mono', monospace" }}>{item.value}</span>
+                  <span style={{ fontSize: '36px', fontWeight: 800, display: 'block', fontFamily: 'monospace' }}>{item.value}</span>
                   <span style={{ fontSize: '13px', opacity: 0.9, marginTop: '8px', display: 'block' }}>{item.label}</span>
                 </div>
               ))}
             </div>
 
-            {/* Trend Chart */}
-            <div style={{ 
-              background: 'white', 
-              borderRadius: '16px', 
-              padding: '24px', 
-              boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-              marginBottom: '24px'
-            }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>
-                📊 Tendencia Anual de Actividades
-              </h3>
+            {/* Trend */}
+            <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>📊 Tendencia de Actividades</h3>
               <ResponsiveContainer width="100%" height={400}>
                 <AreaChart data={getTrendData()}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis dataKey="semana" tick={{ fill: '#666', fontSize: 10 }} />
                   <YAxis tick={{ fill: '#666', fontSize: 12 }} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      background: 'white', 
-                      border: 'none', 
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                    }} 
-                  />
+                  <Tooltip />
                   <Legend />
-                  <Area 
-                    type="monotone" 
-                    dataKey="videoconferencias" 
-                    name="Videoconferencias"
-                    stroke={COLORS.primary} 
-                    fill={COLORS.primary}
-                    fillOpacity={0.3}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="usuarios" 
-                    name="Usuarios CENDOI (x10)"
-                    stroke={COLORS.secondary} 
-                    fill={COLORS.secondary}
-                    fillOpacity={0.3}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="soporte" 
-                    name="Equipos Soporte"
-                    stroke={COLORS.accent} 
-                    fill={COLORS.accent}
-                    fillOpacity={0.3}
-                  />
+                  <Area type="monotone" dataKey="videoconferencias" name="Videoconferencias" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.3} />
+                  <Area type="monotone" dataKey="usuarios" name="Usuarios CENDOI (x10)" stroke={COLORS.secondary} fill={COLORS.secondary} fillOpacity={0.3} />
+                  <Area type="monotone" dataKey="soporte" name="Equipos Soporte" stroke={COLORS.accent} fill={COLORS.accent} fillOpacity={0.3} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
-            {/* Statistics Grid */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-              gap: '16px' 
-            }}>
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
               {[
-                { 
-                  title: '🎥 Videoconferencia', 
-                  stats: [
-                    { label: 'Promedio semanal', value: Math.round(informes.reduce((sum, inf) => sum + inf.videoconferencias, 0) / informes.length) },
-                    { label: 'Máximo', value: Math.max(...informes.map(inf => inf.videoconferencias)) },
-                    { label: 'Mínimo', value: Math.min(...informes.map(inf => inf.videoconferencias)) }
-                  ]
-                },
-                { 
-                  title: '📚 CENDOI', 
-                  stats: [
-                    { label: 'Promedio semanal', value: Math.round(informes.reduce((sum, inf) => sum + inf.usuariosCENDOI, 0) / informes.length) },
-                    { label: 'Máximo', value: Math.max(...informes.map(inf => inf.usuariosCENDOI)) },
-                    { label: 'Mínimo', value: Math.min(...informes.map(inf => inf.usuariosCENDOI)) }
-                  ]
-                },
-                { 
-                  title: '💻 Soporte Técnico', 
-                  stats: [
-                    { label: 'Promedio semanal', value: Math.round(informes.reduce((sum, inf) => sum + inf.equiposConfigurados, 0) / informes.length) },
-                    { label: 'Máximo', value: Math.max(...informes.map(inf => inf.equiposConfigurados)) },
-                    { label: 'Mínimo', value: Math.min(...informes.map(inf => inf.equiposConfigurados)) }
-                  ]
-                },
-                { 
-                  title: '📋 Administrativa', 
-                  stats: [
-                    { label: 'Compras promedio', value: Math.round(informes.reduce((sum, inf) => sum + inf.comprasGestionadas, 0) / informes.length) },
-                    { label: 'Contrataciones totales', value: informes.reduce((sum, inf) => sum + inf.contrataciones, 0) },
-                    { label: 'Transferencias totales', value: informes.reduce((sum, inf) => sum + inf.transferencias, 0) }
-                  ]
-                }
+                { title: '🎥 Videoconferencia', stats: [
+                  { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.videoconferencias, 0) / informes.length) },
+                  { l: 'Máximo', v: Math.max(...informes.map(i => i.videoconferencias)) },
+                  { l: 'Mínimo', v: Math.min(...informes.map(i => i.videoconferencias)) }
+                ]},
+                { title: '📚 CENDOI', stats: [
+                  { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.usuariosCENDOI, 0) / informes.length) },
+                  { l: 'Máximo', v: Math.max(...informes.map(i => i.usuariosCENDOI)) },
+                  { l: 'Mínimo', v: Math.min(...informes.map(i => i.usuariosCENDOI)) }
+                ]},
+                { title: '💻 Soporte', stats: [
+                  { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.equiposConfigurados, 0) / informes.length) },
+                  { l: 'Máximo', v: Math.max(...informes.map(i => i.equiposConfigurados)) },
+                  { l: 'Mínimo', v: Math.min(...informes.map(i => i.equiposConfigurados)) }
+                ]},
+                { title: '📋 Administrativa', stats: [
+                  { l: 'Compras promedio', v: Math.round(informes.reduce((s, i) => s + i.comprasGestionadas, 0) / informes.length) },
+                  { l: 'Contrataciones totales', v: informes.reduce((s, i) => s + i.contrataciones, 0) },
+                  { l: 'Transferencias totales', v: informes.reduce((s, i) => s + i.transferencias, 0) }
+                ]}
               ].map((section, i) => (
-                <div key={i} style={{ 
-                  background: 'white', 
-                  borderRadius: '16px', 
-                  padding: '20px', 
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.08)' 
-                }}>
-                  <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {section.title}
-                  </h4>
+                <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+                  <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px' }}>{section.title}</h4>
                   {section.stats.map((stat, j) => (
-                    <div key={j} style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      padding: '10px 0',
-                      borderBottom: j < section.stats.length - 1 ? '1px solid #eee' : 'none',
-                      fontSize: '14px'
-                    }}>
-                      <span style={{ color: '#666' }}>{stat.label}:</span>
-                      <strong style={{ color: COLORS.primary, fontFamily: "'JetBrains Mono', monospace" }}>{stat.value}</strong>
+                    <div key={j} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: j < section.stats.length - 1 ? '1px solid #eee' : 'none', fontSize: '14px' }}>
+                      <span style={{ color: '#666' }}>{stat.l}:</span>
+                      <strong style={{ color: COLORS.primary, fontFamily: 'monospace' }}>{stat.v}</strong>
                     </div>
                   ))}
                 </div>
@@ -1094,35 +857,17 @@ export default function DRAIDashboard() {
 
         {/* Empty State */}
         {informes.length === 0 && (
-          <div style={{ 
-            maxWidth: '500px', 
-            margin: '60px auto', 
-            textAlign: 'center', 
-            padding: '60px 32px',
-            background: 'white',
-            borderRadius: '24px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
-          }}>
+          <div style={{ maxWidth: '500px', margin: '60px auto', textAlign: 'center', padding: '60px 32px', background: 'white', borderRadius: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
             <span style={{ fontSize: '64px', display: 'block', marginBottom: '20px', opacity: 0.5 }}>📂</span>
             <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>No hay informes cargados</h3>
-            <p style={{ color: '#666', fontSize: '15px' }}>
-              Sube los archivos .docx de los informes semanales para comenzar el análisis
-            </p>
+            <p style={{ color: '#666', fontSize: '15px' }}>Sube los archivos .docx de los informes semanales</p>
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <footer style={{ 
-        maxWidth: '1400px', 
-        margin: '40px auto 0', 
-        padding: '24px 32px', 
-        textAlign: 'center',
-        borderTop: '1px solid #E8E8E8'
-      }}>
-        <p style={{ fontSize: '13px', color: '#888' }}>
-          DRAI Dashboard © 2025 • Facultad de Ingeniería • Universidad de Antioquia
-        </p>
+      <footer style={{ maxWidth: '1400px', margin: '40px auto 0', padding: '24px 32px', textAlign: 'center', borderTop: '1px solid #E8E8E8' }}>
+        <p style={{ fontSize: '13px', color: '#888' }}>DRAI Dashboard © 2025 • Facultad de Ingeniería • Universidad de Antioquia</p>
       </footer>
     </div>
   );
