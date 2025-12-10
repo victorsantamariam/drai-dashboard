@@ -2,117 +2,167 @@ import { useState } from 'react';
 import * as mammoth from 'mammoth';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+  AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  LineChart, Line
 } from 'recharts';
 
 // ============================================
-// PARSER v3 - CORREGIDO PARA ESTRUCTURA EXACTA
+// PARSER v4 - COMPLETO CON TODAS LAS 9 ÁREAS
 // ============================================
 const parseInformeDRAI = (htmlContent, weekNumber) => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlContent, 'text/html');
   const text = doc.body.textContent || '';
-  const html = htmlContent;
   
+  // Helper: contar actividades (bullets/items) en una sección
+  const countActivities = (sectionText) => {
+    if (!sectionText) return 0;
+    const matches = sectionText.match(/-\s+[A-Z]/g) || [];
+    return matches.length;
+  };
+
+  // Helper: extraer número de un patrón
+  const extractNumber = (pattern, txt = text) => {
+    const match = txt.match(pattern);
+    return match ? parseInt(match[1]) : 0;
+  };
+
+  // ============================================
+  // EXTRAER FECHA DEL INFORME
+  // ============================================
+  let fechaInforme = `Semana ${weekNumber}`;
+  const fechaMatch = text.match(/Informe Semana.*?del\s+(\d+)\s+al\s+(\d+)\s+de\s+(\w+)\s*(\d{4})?/i);
+  if (fechaMatch) {
+    fechaInforme = `${fechaMatch[1]}-${fechaMatch[2]} ${fechaMatch[3]} ${fechaMatch[4] || '2025'}`;
+  }
+
   // ============================================
   // 1. APOYO LOGÍSTICO Y VIDEOCONFERENCIA
   // ============================================
   
-  // Videoconferencias: "Se da soporte y asistencia a 60 videoconferencias"
-  let videoconferencias = 0;
-  const videoMatch = text.match(/asistencia a\s*(\d+)\s*videoconferencias/i);
-  if (videoMatch) videoconferencias = parseInt(videoMatch[1]);
-  
-  // Streamings: "Se realizan 1 transmisiones de streaming"
-  let streamings = 0;
-  const streamMatch = text.match(/Se realizan?\s*(\d+)\s*transmisiones?\s*de\s*streaming/i);
-  if (streamMatch) streamings = parseInt(streamMatch[1]);
-  
-  // Grabaciones: "Se apoyan 3 grabaciones"
-  let grabaciones = 0;
-  const grabMatch = text.match(/Se apoyan?\s*(\d+)\s*grabaciones/i);
-  if (grabMatch) grabaciones = parseInt(grabMatch[1]);
-  
-  // Solicitudes: "Se reciben 63 solicitudes"
-  let solicitudesVideoconf = 0;
-  const solicMatch = text.match(/Se reciben\s*(\d+)\s*solicitudes/i);
-  if (solicMatch) solicitudesVideoconf = parseInt(solicMatch[1]);
+  // Logístico - contar actividades
+  let actividadesLogistico = 0;
+  const logisticoMatch = text.match(/\*\*Logístico\*\*([\s\S]*?)(?=\*\*Académico\*\*|\*\*Inf)/i);
+  if (logisticoMatch) {
+    actividadesLogistico = (logisticoMatch[1].match(/-\s+/g) || []).length;
+  }
+
+  // Académico - contar actividades
+  let actividadesAcademico = 0;
+  const academicoMatch = text.match(/\*\*Académico\*\*([\s\S]*?)(?=\*\*Inf|$)/i);
+  if (academicoMatch) {
+    actividadesAcademico = (academicoMatch[1].match(/-\s+/g) || []).length;
+  }
+
+  // Infraestructura - contar actividades
+  let actividadesInfraestructura = 0;
+  const infraMatch = text.match(/(?:Infraestructura|Inf\s*raestructura)\*\*([\s\S]*?)(?=\*\*Vide|\*\*Video)/i);
+  if (infraMatch) {
+    actividadesInfraestructura = (infraMatch[1].match(/-\s+/g) || []).length;
+  }
+
+  // Videoconferencia métricas
+  const videoconferencias = extractNumber(/asistencia a\s*(\d+)\s*videoconferencias/i);
+  const streamings = extractNumber(/Se realizan?\s*(\d+)\s*transmisiones?\s*de\s*streaming/i);
+  const grabaciones = extractNumber(/Se apoyan?\s*(\d+)\s*grabaciones/i);
+  const solicitudesVideoconf = extractNumber(/Se reciben\s*(\d+)\s*solicitudes/i);
+  const eventosExtension = extractNumber(/(\d+)\s*eventos?\s*en\s*la\s*sala\s*de\s*videoconferencia/i);
 
   // ============================================
-  // 2. GESTIÓN DE SISTEMAS - Proyectos activos
+  // 2. GESTIÓN DE SISTEMAS DE INFORMACIÓN
   // ============================================
-  const proyectosActivos = [
-    /praxis/i, /portafolio/i, /júpiter|jupiter/i, /sigac/i, 
-    /concurso.*men/i, /cgr/i, /salas info/i
-  ].filter(p => p.test(text)).length;
+  
+  // Proyectos activos (detectar cuáles tienen contenido)
+  const proyectosSistemas = {
+    cancelacionSemestre: /Cancelación.*semestre/i.test(text) && !/Sin novedad/i.test(text.substring(text.indexOf('Cancelación'), text.indexOf('Cancelación') + 200)),
+    praxisFacultad: /Praxis\s*Facultad/i.test(text) && !/Sin novedad/i.test(text.substring(text.indexOf('Praxis Facultad') || 0, (text.indexOf('Praxis Facultad') || 0) + 200)),
+    praxisUniversidad: /Praxis\s*Universidad/i.test(text),
+    portafolio: /Portafolio/i.test(text),
+    concursoCGR: /Concurso.*CGR|CGR.*méritos/i.test(text),
+    concursoMEN: /Concurso.*MEN|MEN.*concurso/i.test(text),
+    aplicacionCAI: /Aplicación\s*CAI/i.test(text),
+    jupiter: /Júpiter|Jupiter/i.test(text),
+    salasInfo: /Salas\s*Info/i.test(text),
+    sigac: /SIGAC/i.test(text),
+    propuestas: /Propuestas/i.test(text)
+  };
+  
+  const proyectosActivos = Object.values(proyectosSistemas).filter(Boolean).length;
+  
+  // HUs completadas
+  const husCompletadas = (text.match(/Se completa.*HU-?\d+|HU-?\d+.*completa/gi) || []).length;
+  const husIniciadas = (text.match(/Se inicia.*HU-?\d+|HU-?\d+.*inicia/gi) || []).length;
 
   // ============================================
   // 3. SOPORTE TELEMÁTICO
   // ============================================
   
-  // Contar instalaciones de S.O y mantenimientos
+  // Documentación y transferencia
+  const tieneDocumentacion = /Documentación.*transferencia|empalme/i.test(text);
+  
+  // Soporte Técnico - instalaciones y mantenimientos
   const instalacionesSO = (text.match(/instalación de S\.O|instalación de.*W11|Se realiza instalación/gi) || []).length;
   const mantenimientos = (text.match(/mantenimiento correctivo|mantenimiento lógico/gi) || []).length;
+  const configuracionesGuacamole = (text.match(/GUACAMOLE/gi) || []).length;
   const equiposConfigurados = instalacionesSO + mantenimientos;
-  
-  // Reservas Puntuales: "Reservas Puntuales Agendadas: 4."
-  let reservasPuntuales = 0;
-  const reservasMatch = text.match(/Reservas Puntuales[^:]*:\s*(\d+)/i);
-  if (reservasMatch) reservasPuntuales = parseInt(reservasMatch[1]);
-  
-  // Activación de Licencias: "Activación De Licencia: 2."
-  let activacionesLicencia = 0;
-  const licenciasMatch = text.match(/Activación[^:]*Licencia[^:]*:\s*(\d+)/i);
-  if (licenciasMatch) activacionesLicencia = parseInt(licenciasMatch[1]);
-  
-  // Atención vía Correo: "Atención Solicitud Vía Correo: 17."
-  let atencionCorreo = 0;
-  const correoMatch = text.match(/Atención[^:]*(?:Vía|Via)\s*Correo[^:]*:\s*(\d+)/i);
-  if (correoMatch) atencionCorreo = parseInt(correoMatch[1]);
+
+  // Salas de Cómputo - métricas específicas
+  const reservasPuntuales = extractNumber(/Reservas Puntuales[^:]*:\s*(\d+)/i);
+  const activacionesLicencia = extractNumber(/Activación[^:]*Licencia[^:]*:\s*(\d+)/i);
+  const atencionCorreo = extractNumber(/Atención[^:]*(?:Vía|Via)\s*Correo[^:]*:\s*(\d+)/i);
+  const actualizacionSoftware = extractNumber(/Actualización Software[^:]*:\s*(\d+)/i);
+  const aperturaAVI = extractNumber(/Apertura Y Cierre De AVI[^:]*:\s*(\d+)/i);
+  const soporteTalentoTech = extractNumber(/Soporte A Talento Tech[^:]*:\s*(\d+)/i);
+  const atencionPresencial = extractNumber(/Atención Presencial[^:]*:\s*(\d+)/i);
+  const soporteRequerimientoSalas = extractNumber(/Soporte Requerimiento Salas[^:]*:\s*(\d+)/i);
+
+  // Soporte Aplicativos
+  const soporteSsofi = (text.match(/Soporte Ssofi|Ssofi/gi) || []).length;
+  const soportePaysa = (text.match(/Paysa/gi) || []).length;
 
   // ============================================
-  // 5. CENDOI - GESTIÓN DOCUMENTAL
+  // 4. SOPORTE TÉCNICO Y ACADÉMICO INGENI@ - REGIONES
   // ============================================
   
-  // Usuarios CENDOI - Buscar el patrón específico:
-  // "Semana del X al Y de MES                    NUMERO"
-  let usuariosCENDOI = 0;
+  const soporteTelefonico = /Atención de llamadas/i.test(text);
+  const soporteEmailFacultad = extractNumber(/Respuesta.*correos.*-(\d+)/i) || 
+                               (text.match(/Respuesta a diferentes cuentas de correos/i) ? 1 : 0);
   
-  // Extraer solo la sección CENDOI
+  // Detectar proyectos activos en esta área
+  const proyectosRegiones = {
+    talentoTechIU: /Talento\s*Tech.*IU\s*TRAINING/i.test(text),
+    linkTechSapiencia: /LinkTech.*Sapiencia/i.test(text),
+    procuraduria: /Procurad|Procuraduría/i.test(text),
+    ingeniaCampus: /Ingeni@.*Campus|Campus.*Ingeni@/i.test(text)
+  };
+
+  // ============================================
+  // 5. GESTIÓN DOCUMENTAL CENDOI
+  // ============================================
+  
+  // Usuarios CENDOI
+  let usuariosCENDOI = 0;
   const cendoiStart = text.indexOf('Gestión Documental CENDOI');
   const cendoiEnd = text.indexOf('Unidad de Gestión de Proyectos');
   
   if (cendoiStart > -1 && cendoiEnd > -1) {
     const cendoiText = text.substring(cendoiStart, cendoiEnd);
-    
-    // Buscar: "Semana del X al Y de mes    NUMERO"
-    // El número de usuarios está después del nombre del mes
     const usuariosMatch = cendoiText.match(/(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+(\d{2,3})/i);
-    if (usuariosMatch) {
-      usuariosCENDOI = parseInt(usuariosMatch[1]);
-    }
+    if (usuariosMatch) usuariosCENDOI = parseInt(usuariosMatch[1]);
   }
   
-  // Fallback: buscar "Cantidad total de usuarios" seguido de número de 3 dígitos
+  // Fallback
   if (!usuariosCENDOI || usuariosCENDOI > 1000) {
     const fallbackMatch = text.match(/diciembre\s+(\d{3})\s/i) || 
-                          text.match(/noviembre\s+(\d{3})\s/i) ||
-                          text.match(/total de usuarios[^\d]*(\d{3})/i);
-    if (fallbackMatch) {
-      usuariosCENDOI = parseInt(fallbackMatch[1]);
-    }
+                          text.match(/noviembre\s+(\d{3})\s/i);
+    if (fallbackMatch) usuariosCENDOI = parseInt(fallbackMatch[1]);
   }
-  
-  // Libros, PC, Diademas - están en una tabla dentro de CENDOI
-  // Formato: "1    77    88    80 usuarios"
-  let libros = 0, pcs = 0, diademas = 0;
-  
+
+  // Préstamos
+  let libros = 0, pcs = 0, diademas = 0, mouse = 0;
   if (cendoiStart > -1 && cendoiEnd > -1) {
     const cendoiText = text.substring(cendoiStart, cendoiEnd);
-    
-    // Buscar la fila de la tabla con los números
-    // El patrón es: número pequeño (libros), número ~70-100 (PC), número ~80-120 (diademas)
-    const tablaMatch = cendoiText.match(/(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})\s+(\d{2,3})/);
+    const tablaMatch = cendoiText.match(/(\d{1,2})\s+(\d{2,3})\s+(\d{2,3})/);
     if (tablaMatch) {
       libros = parseInt(tablaMatch[1]);
       pcs = parseInt(tablaMatch[2]);
@@ -120,76 +170,251 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
     }
   }
 
+  // Subactividades CENDOI
+  const cendoiActividades = {
+    usuariosAtendidos: usuariosCENDOI > 0,
+    patrimonio: /Patrimonio/i.test(text),
+    autoarchivo: /Autoarchivo/i.test(text),
+    auxiliarSEA: /Auxiliar.*SEA/i.test(text)
+  };
+
   // ============================================
-  // 6. UGP - Reuniones
+  // 6. UNIDAD DE GESTIÓN DE PROYECTOS (UGP)
   // ============================================
+  
   const reunionesUGP = (text.match(/(?:Se realiza|Se realizó) reunión/gi) || []).length;
+  const capacitacionesUGP = (text.match(/capacitación|capacitaciones/gi) || []).length;
+  
+  const ugpActividades = {
+    planAccion: /Plan de Acción|Plan\+/i.test(text),
+    reunionesCapacitaciones: reunionesUGP > 0,
+    email: /Se revisaron.*correos electrónicos/i.test(text),
+    macroproyectos: /Macroproyecto/i.test(text)
+  };
 
   // ============================================
   // 7. INGENI@
   // ============================================
   
-  // Matrículas/pruebas Talento Tech: "pruebas de inicio de usuarios del proyecto Talento Tech-10"
-  let talentoTechMatriculas = 0;
-  const talentoMatch = text.match(/(?:Talento Tech|pruebas de inicio)[^\d]*(\d+)/i);
-  if (talentoMatch) talentoTechMatriculas = parseInt(talentoMatch[1]);
-  
-  // PQRS
-  let pqrsAtendidas = 0;
-  const pqrsMatch = text.match(/Respuesta[^P]*PQRS[^\d]*(\d+)/i) || text.match(/PQRS[^\d]*(\d+)/i);
-  if (pqrsMatch) pqrsAtendidas = parseInt(pqrsMatch[1]);
+  // Subactividades de Ingeni@
+  const ingeniaActividades = {
+    administrativo: /Ingeni@.*Administrativo/i.test(text),
+    academico: /Ingeni@.*Académico/i.test(text),
+    comunicaciones: /Ingeni@.*Comunicaciones/i.test(text),
+    soporte: /Ingeni@.*Soporte/i.test(text),
+    permanenciaTalentoTech: /Permanencia.*Talento|Talento.*Permanencia/i.test(text),
+    talentoTechAdmin: /Talento Tech.*Administrativo/i.test(text),
+    talentoTechAcademico: /Talento Tech.*Académ/i.test(text),
+    proyectoPTIES: /Proyecto.*PTIES|PTIES.*Administrativo/i.test(text),
+    proyectoCGR: /Proyecto.*CGR/i.test(text)
+  };
+
+  // Métricas Ingeni@
+  const talentoTechMatriculas = extractNumber(/Talento Tech[^\d]*(\d+)/i);
+  const pruebasInicio = extractNumber(/pruebas de inicio[^\d]*(\d+)/i);
+  const storiesRedes = extractNumber(/Stories.*redes.*sociales[^\d]*(\d+)/i);
+  const reportesHorasCatedra = extractNumber(/reportes de horas.*cátedra[^\d]*(\d+)/i);
+  const pqrsAtendidas = extractNumber(/Respuesta.*PQRS[^\d]*(\d+)/i) || extractNumber(/PQRS[^\d]*(\d+)/i);
+  const acompInterventoria = extractNumber(/Acompañamiento interventoría[^\d]*(\d+)/i);
 
   // ============================================
   // 8. PRODUCCIÓN
   // ============================================
+  
+  const produccionActividades = {
+    facultad: /Producción[\s\S]*?Facultad/i.test(text),
+    contraloria: /Producción[\s\S]*?Contraloría/i.test(text),
+    especializacion: /Esp.*Analítica|Analítica.*datos/i.test(text),
+    talentoTech: /Producción[\s\S]*?Talent/i.test(text)
+  };
+
   const disenosRealizados = (text.match(/[Dd]iseño de|[Dd]iseño y/g) || []).length;
+  const diagramaciones = (text.match(/diagramación/gi) || []).length;
+  const transmisiones = (text.match(/[Tt]ransmisión/g) || []).length;
+  const grabacionesProduccion = (text.match(/[Gg]rabación de/g) || []).length;
 
   // ============================================
   // 9. GESTIÓN ADMINISTRATIVA
   // ============================================
+  
+  const adminActividades = {
+    contratacion: /Contratación/i.test(text),
+    compras: /Compras/i.test(text),
+    transferencias: /Transferencia/i.test(text),
+    sea: /SEA/i.test(text),
+    varios: /Varios/i.test(text)
+  };
+
   const comprasGestionadas = (text.match(/[Ss]olicitud de [Cc]ompra|[Ss]olicitud [Cc]ompra/g) || []).length;
   const contrataciones = (text.match(/[Ee]xoneración|[Cc]reación [Tt]erceros|contratos? (?:cátedra|firmados?)/gi) || []).length;
   const transferencias = (text.match(/[Ss]olicitud.*[Tt]ransferencia|[Tt]ransferencia para/gi) || []).length;
+  const avalesPago = (text.match(/[Aa]val para pago|AVAL PARA PAGO/g) || []).length;
+  const liberacionPlazas = (text.match(/[Ll]iberación [Pp]laza/g) || []).length;
 
   // ============================================
-  // RETORNO DE MÉTRICAS
+  // RETORNO COMPLETO
   // ============================================
   return {
     semana: weekNumber,
-    fecha: `Semana ${weekNumber}`,
+    fecha: fechaInforme,
     
-    // Área 1: Videoconferencia
+    // 1. Apoyo Logístico y Videoconferencia
+    area1: {
+      nombre: 'Apoyo Logístico y Videoconferencia',
+      subactividades: {
+        logistico: { nombre: 'Logístico', valor: actividadesLogistico, descripcion: 'actividades' },
+        academico: { nombre: 'Académico', valor: actividadesAcademico, descripcion: 'actividades' },
+        infraestructura: { nombre: 'Infraestructura', valor: actividadesInfraestructura, descripcion: 'actividades' },
+        videoconferencia: { 
+          nombre: 'Videoconferencia', 
+          valor: videoconferencias,
+          detalles: { streamings, grabaciones, solicitudesVideoconf, eventosExtension }
+        }
+      },
+      totales: { videoconferencias, streamings, grabaciones, solicitudesVideoconf }
+    },
+
+    // 2. Gestión de Sistemas de Información
+    area2: {
+      nombre: 'Gestión de Sistemas de Información',
+      subactividades: {
+        cancelacionSemestre: { nombre: 'Cancelación de Semestre', activo: proyectosSistemas.cancelacionSemestre },
+        praxisFacultad: { nombre: 'Praxis Facultad', activo: proyectosSistemas.praxisFacultad },
+        praxisUniversidad: { nombre: 'Praxis Universidad', activo: proyectosSistemas.praxisUniversidad },
+        portafolio: { nombre: 'Portafolio Cambio de Imagen', activo: proyectosSistemas.portafolio },
+        concursoCGR: { nombre: 'Concurso de méritos CGR', activo: proyectosSistemas.concursoCGR },
+        concursoMEN: { nombre: 'Concurso MEN', activo: proyectosSistemas.concursoMEN },
+        aplicacionCAI: { nombre: 'Aplicación CAI', activo: proyectosSistemas.aplicacionCAI },
+        propuestas: { nombre: 'Propuestas', activo: proyectosSistemas.propuestas },
+        jupiter: { nombre: 'Júpiter', activo: proyectosSistemas.jupiter },
+        salasInfo: { nombre: 'Salas Info', activo: proyectosSistemas.salasInfo },
+        sigac: { nombre: 'SIGAC+', activo: proyectosSistemas.sigac }
+      },
+      totales: { proyectosActivos, husCompletadas, husIniciadas }
+    },
+
+    // 3. Soporte Telemático
+    area3: {
+      nombre: 'Soporte Telemático',
+      subactividades: {
+        documentacion: { nombre: 'Documentación y transferencia', activo: tieneDocumentacion },
+        soporteInfraestructura: { nombre: 'Soporte a Infraestructura', activo: true },
+        soporteTecnico: { 
+          nombre: 'Soporte Técnico', 
+          valor: equiposConfigurados,
+          detalles: { instalacionesSO, mantenimientos, configuracionesGuacamole }
+        },
+        salasComputo: { 
+          nombre: 'Salas de Cómputo',
+          detalles: { reservasPuntuales, activacionesLicencia, atencionCorreo, actualizacionSoftware, aperturaAVI, atencionPresencial }
+        },
+        soporteAplicativos: { 
+          nombre: 'Soporte Aplicativos',
+          detalles: { soporteSsofi, soportePaysa }
+        }
+      },
+      totales: { equiposConfigurados, reservasPuntuales, activacionesLicencia, atencionCorreo }
+    },
+
+    // 4. Soporte Técnico y Académico Ingeni@ - Regiones
+    area4: {
+      nombre: 'Soporte Técnico y Académico Ingeni@ - Comunicaciones Regiones',
+      subactividades: {
+        soporteTelefonico: { nombre: 'Soporte telefónico', activo: soporteTelefonico },
+        soporteEmailFacultad: { nombre: 'Soporte email-Facultad', valor: soporteEmailFacultad },
+        facultadIngenieria: { nombre: 'Facultad de Ingeniería-Ingeni@', activo: true },
+        facultadMoodle: { nombre: 'Facultad de Ingeniería-Moodle', activo: true },
+        facultadZoom: { nombre: 'Facultad de Ingeniería-ZOOM', activo: true },
+        talentoTechIU: { nombre: 'Talento Tech- IU TRAINING', activo: proyectosRegiones.talentoTechIU },
+        linkTechSapiencia: { nombre: 'LinkTech-Sapiencia', activo: proyectosRegiones.linkTechSapiencia },
+        procuraduria: { nombre: 'Proyecto Procuraduría', activo: proyectosRegiones.procuraduria }
+      },
+      totales: { soporteEmailFacultad }
+    },
+
+    // 5. Gestión Documental CENDOI
+    area5: {
+      nombre: 'Gestión Documental CENDOI',
+      subactividades: {
+        usuariosAtendidos: { nombre: 'A. Usuarios Atendidos', valor: usuariosCENDOI },
+        patrimonio: { nombre: 'C. Patrimonio', activo: cendoiActividades.patrimonio },
+        autoarchivo: { nombre: 'D. Autoarchivo', activo: cendoiActividades.autoarchivo },
+        auxiliarSEA: { nombre: 'F. Auxiliar SEA', activo: cendoiActividades.auxiliarSEA }
+      },
+      totales: { usuariosCENDOI, libros, pcs, diademas }
+    },
+
+    // 6. Unidad de Gestión de Proyectos
+    area6: {
+      nombre: 'Unidad de Gestión de Proyectos',
+      subactividades: {
+        planAccion: { nombre: 'Plan de Acción', activo: ugpActividades.planAccion },
+        reunionesCapacitaciones: { nombre: 'Reuniones y Capacitaciones', valor: reunionesUGP },
+        email: { nombre: 'Email', activo: ugpActividades.email }
+      },
+      totales: { reunionesUGP, capacitacionesUGP }
+    },
+
+    // 7. Ingeni@
+    area7: {
+      nombre: 'Ingeni@',
+      subactividades: {
+        administrativo: { nombre: 'Ingeni@-Administrativo', activo: ingeniaActividades.administrativo },
+        academico: { nombre: 'Ingeni@-Académico', activo: ingeniaActividades.academico },
+        comunicaciones: { nombre: 'Ingeni@-Comunicaciones', activo: ingeniaActividades.comunicaciones },
+        soporte: { nombre: 'Ingeni@-Soporte', activo: ingeniaActividades.soporte },
+        permanenciaTT: { nombre: 'Ingeni@-Permanencia-Talento Tech', activo: ingeniaActividades.permanenciaTalentoTech },
+        talentoTechAdmin: { nombre: 'Talento Tech-IU TRAINING-Administrativo', activo: ingeniaActividades.talentoTechAdmin },
+        talentoTechAcademico: { nombre: 'Talento Tech-IU TRAINING-Académico', activo: ingeniaActividades.talentoTechAcademico },
+        proyectoPTIES: { nombre: 'Proyecto PTIES-Administrativo', activo: ingeniaActividades.proyectoPTIES },
+        proyectoCGR: { nombre: 'Proyecto CGR-Administrativo', activo: ingeniaActividades.proyectoCGR }
+      },
+      totales: { talentoTechMatriculas, pruebasInicio, storiesRedes, reportesHorasCatedra, pqrsAtendidas, acompInterventoria }
+    },
+
+    // 8. Producción
+    area8: {
+      nombre: 'Producción',
+      subactividades: {
+        facultad: { nombre: 'Facultad', activo: produccionActividades.facultad },
+        contraloria: { nombre: 'Contraloría', activo: produccionActividades.contraloria },
+        especializacion: { nombre: 'Esp Analítica y ciencia de datos', activo: produccionActividades.especializacion },
+        talentoTech: { nombre: 'Talento Tech', activo: produccionActividades.talentoTech }
+      },
+      totales: { disenosRealizados, diagramaciones, transmisiones, grabacionesProduccion }
+    },
+
+    // 9. Gestión Administrativa
+    area9: {
+      nombre: 'Gestión Administrativa',
+      subactividades: {
+        contratacion: { nombre: 'Contratación', valor: contrataciones },
+        compras: { nombre: 'Compras', valor: comprasGestionadas },
+        transferencias: { nombre: 'Transferencia', valor: transferencias },
+        sea: { nombre: 'SEA', valor: liberacionPlazas },
+        varios: { nombre: 'Varios', valor: avalesPago }
+      },
+      totales: { comprasGestionadas, contrataciones, transferencias, avalesPago, liberacionPlazas }
+    },
+
+    // Métricas legacy para compatibilidad
     videoconferencias,
     streamings,
     grabaciones,
     solicitudesVideoconf,
-    
-    // Área 2: Sistemas
     proyectosActivos,
-    
-    // Área 3: Soporte Telemático
     equiposConfigurados,
     reservasPuntuales,
     activacionesLicencia,
     atencionCorreo,
-    
-    // Área 5: CENDOI
     usuariosCENDOI,
     libros,
     pcs,
     diademas,
-    
-    // Área 6: UGP
     reunionesUGP,
-    
-    // Área 7: Ingeni@
     talentoTechMatriculas,
     pqrsAtendidas,
-    
-    // Área 8: Producción
     disenosRealizados,
-    
-    // Área 9: Administrativa
     comprasGestionadas,
     contrataciones,
     transferencias
@@ -207,60 +432,205 @@ const COLORS = {
   warning: '#FF9800',
   error: '#EA4335',
   purple: '#9C27B0',
-  pink: '#E91E63'
+  pink: '#E91E63',
+  blue: '#1976D2',
+  teal: '#00897B',
+  orange: '#F57C00',
+  indigo: '#3F51B5'
 };
 
+const AREA_COLORS = [
+  '#1B5E20', // Area 1
+  '#1976D2', // Area 2
+  '#00897B', // Area 3
+  '#F57C00', // Area 4
+  '#9C27B0', // Area 5
+  '#3F51B5', // Area 6
+  '#E91E63', // Area 7
+  '#FF5722', // Area 8
+  '#607D8B'  // Area 9
+];
+
+const AREA_ICONS = ['🎥', '💻', '🔧', '📞', '📚', '📋', '🎓', '🎨', '📁'];
+
 // ============================================
-// COMPONENTE TARJETA MÉTRICA
+// COMPONENTE: Tarjeta de Área Expandible
 // ============================================
-const MetricCard = ({ title, value, change, icon, color = COLORS.primary }) => {
-  const isPositive = change >= 0;
-  const hasChange = change !== undefined && change !== null && !isNaN(change) && isFinite(change);
+const AreaCard = ({ area, index, data, previousData, expanded, onToggle }) => {
+  const color = AREA_COLORS[index];
+  const icon = AREA_ICONS[index];
   
+  const getSubactividadesActivas = () => {
+    if (!data?.subactividades) return 0;
+    return Object.values(data.subactividades).filter(s => s.activo || s.valor > 0).length;
+  };
+
   return (
     <div style={{
       background: 'white',
       borderRadius: '16px',
-      padding: '20px',
+      overflow: 'hidden',
       boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
       borderLeft: `4px solid ${color}`,
+      transition: 'all 0.3s ease'
     }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-        <div style={{
-          width: '48px',
-          height: '48px',
-          background: `${color}20`,
-          borderRadius: '12px',
+      {/* Header clickeable */}
+      <div 
+        onClick={onToggle}
+        style={{
+          padding: '16px 20px',
+          cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '24px',
-          flexShrink: 0
-        }}>
-          {icon}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <span style={{ fontSize: '13px', color: '#666', fontWeight: 500 }}>{title}</span>
-          <span style={{ 
-            fontSize: '32px', 
-            fontWeight: 800, 
-            color: '#1a1a1a', 
-            lineHeight: 1,
-            fontFamily: "monospace"
-          }}>
-            {value}
-          </span>
-          {hasChange && (
-            <span style={{ 
-              fontSize: '12px', 
-              fontWeight: 600, 
-              color: isPositive ? COLORS.success : COLORS.error
-            }}>
-              {isPositive ? '↑' : '↓'} {Math.abs(change)}% vs anterior
+          justifyContent: 'space-between',
+          background: expanded ? `${color}10` : 'white',
+          transition: 'background 0.2s'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '24px' }}>{icon}</span>
+          <div>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: '#1a1a1a' }}>
+              {index + 1}. {area}
+            </h3>
+            <span style={{ fontSize: '12px', color: '#888' }}>
+              {getSubactividadesActivas()} subactividades activas
             </span>
+          </div>
+        </div>
+        <span style={{ 
+          fontSize: '20px', 
+          transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform 0.3s'
+        }}>
+          ▼
+        </span>
+      </div>
+
+      {/* Contenido expandible */}
+      {expanded && data && (
+        <div style={{ padding: '0 20px 20px' }}>
+          {/* Subactividades */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+            marginTop: '12px'
+          }}>
+            {Object.entries(data.subactividades || {}).map(([key, sub]) => (
+              <div 
+                key={key}
+                style={{
+                  padding: '12px',
+                  background: sub.activo || sub.valor > 0 ? `${color}08` : '#f5f5f5',
+                  borderRadius: '8px',
+                  borderLeft: `3px solid ${sub.activo || sub.valor > 0 ? color : '#ddd'}`
+                }}
+              >
+                <div style={{ 
+                  fontSize: '12px', 
+                  fontWeight: 600, 
+                  color: sub.activo || sub.valor > 0 ? '#1a1a1a' : '#999',
+                  marginBottom: '4px'
+                }}>
+                  {sub.nombre}
+                </div>
+                {sub.valor !== undefined && (
+                  <div style={{ fontSize: '20px', fontWeight: 800, color }}>
+                    {sub.valor}
+                  </div>
+                )}
+                {sub.activo !== undefined && !sub.valor && (
+                  <div style={{ 
+                    fontSize: '11px', 
+                    color: sub.activo ? COLORS.success : '#999',
+                    fontWeight: 600
+                  }}>
+                    {sub.activo ? '✓ Activo' : '○ Sin reporte'}
+                  </div>
+                )}
+                {sub.detalles && (
+                  <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>
+                    {Object.entries(sub.detalles).map(([k, v]) => (
+                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{k}:</span>
+                        <strong>{v}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Totales */}
+          {data.totales && Object.keys(data.totales).length > 0 && (
+            <div style={{ 
+              marginTop: '16px', 
+              padding: '12px', 
+              background: `linear-gradient(135deg, ${color}, ${color}dd)`,
+              borderRadius: '8px',
+              color: 'white'
+            }}>
+              <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '8px', fontWeight: 600 }}>
+                TOTALES DE LA SEMANA
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+                {Object.entries(data.totales).map(([key, val]) => (
+                  <div key={key} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '20px', fontWeight: 800 }}>{val}</div>
+                    <div style={{ fontSize: '10px', opacity: 0.8 }}>{key}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// COMPONENTE: Resumen Rápido
+// ============================================
+const QuickSummary = ({ data }) => {
+  if (!data) return null;
+
+  const summaryItems = [
+    { icon: '🎥', label: 'Videoconferencias', value: data.videoconferencias, color: COLORS.primary },
+    { icon: '📡', label: 'Streamings', value: data.streamings, color: COLORS.secondary },
+    { icon: '👥', label: 'Usuarios CENDOI', value: data.usuariosCENDOI, color: COLORS.accent },
+    { icon: '💻', label: 'Equipos', value: data.equiposConfigurados, color: COLORS.blue },
+    { icon: '🎓', label: 'Talento Tech', value: data.talentoTechMatriculas, color: COLORS.purple },
+    { icon: '📋', label: 'Proyectos Activos', value: data.proyectosActivos, color: COLORS.teal },
+    { icon: '🛒', label: 'Compras', value: data.comprasGestionadas, color: COLORS.orange },
+    { icon: '📝', label: 'Contrataciones', value: data.contrataciones, color: COLORS.indigo }
+  ];
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+      gap: '12px',
+      marginBottom: '24px'
+    }}>
+      {summaryItems.map((item, i) => (
+        <div key={i} style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '16px',
+          textAlign: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          borderTop: `3px solid ${item.color}`
+        }}>
+          <span style={{ fontSize: '24px' }}>{item.icon}</span>
+          <div style={{ fontSize: '28px', fontWeight: 800, color: item.color, marginTop: '8px' }}>
+            {item.value}
+          </div>
+          <div style={{ fontSize: '11px', color: '#888', fontWeight: 500 }}>{item.label}</div>
+        </div>
+      ))}
     </div>
   );
 };
@@ -274,6 +644,24 @@ export default function DRAIDashboard() {
   const [previousWeek, setPreviousWeek] = useState(null);
   const [view, setView] = useState('semanal');
   const [loading, setLoading] = useState(false);
+  const [expandedAreas, setExpandedAreas] = useState({});
+
+  const toggleArea = (index) => {
+    setExpandedAreas(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
+  const expandAll = () => {
+    const all = {};
+    for (let i = 0; i < 9; i++) all[i] = true;
+    setExpandedAreas(all);
+  };
+
+  const collapseAll = () => {
+    setExpandedAreas({});
+  };
 
   // Cargar archivo .docx
   const handleFileUpload = async (event) => {
@@ -301,7 +689,6 @@ export default function DRAIDashboard() {
     
     const allInformes = [...informes, ...newInformes].sort((a, b) => a.semana - b.semana);
     
-    // Eliminar duplicados
     const uniqueInformes = allInformes.reduce((acc, curr) => {
       const existing = acc.find(i => i.semana === curr.semana);
       if (!existing) acc.push(curr);
@@ -320,133 +707,30 @@ export default function DRAIDashboard() {
     setLoading(false);
   };
 
-  const calcChange = (current, previous) => {
-    if (!previous || previous === 0) return null;
-    return Math.round(((current - previous) / previous) * 100);
-  };
-
-  const getAreaChartData = () => {
-    if (!currentWeek) return [];
-    return [
-      { area: 'Videoconf.', actual: currentWeek.videoconferencias, anterior: previousWeek?.videoconferencias || 0 },
-      { area: 'Soporte', actual: currentWeek.equiposConfigurados, anterior: previousWeek?.equiposConfigurados || 0 },
-      { area: 'CENDOI', actual: Math.round(currentWeek.usuariosCENDOI / 10), anterior: Math.round((previousWeek?.usuariosCENDOI || 0) / 10) },
-      { area: 'Ingeni@', actual: currentWeek.talentoTechMatriculas, anterior: previousWeek?.talentoTechMatriculas || 0 },
-      { area: 'Producción', actual: currentWeek.disenosRealizados, anterior: previousWeek?.disenosRealizados || 0 },
-      { area: 'Admin.', actual: currentWeek.comprasGestionadas, anterior: previousWeek?.comprasGestionadas || 0 },
-    ];
-  };
-
-  const getRadarData = () => {
-    if (!currentWeek) return [];
-    return [
-      { area: 'Videoconferencias', value: Math.min((currentWeek.videoconferencias / 80) * 100, 100) },
-      { area: 'Soporte Técnico', value: Math.min((currentWeek.equiposConfigurados / 15) * 100, 100) },
-      { area: 'CENDOI', value: Math.min((currentWeek.usuariosCENDOI / 400) * 100, 100) },
-      { area: 'Ingeni@', value: Math.min((currentWeek.talentoTechMatriculas / 80) * 100, 100) },
-      { area: 'Producción', value: Math.min((currentWeek.disenosRealizados / 10) * 100, 100) },
-      { area: 'Administrativa', value: Math.min((currentWeek.comprasGestionadas / 15) * 100, 100) },
-    ];
-  };
-
   const getTrendData = () => {
     return informes.map(inf => ({
       semana: `S${inf.semana}`,
       videoconferencias: inf.videoconferencias,
       usuarios: Math.round(inf.usuariosCENDOI / 10),
-      soporte: inf.equiposConfigurados
+      soporte: inf.equiposConfigurados,
+      compras: inf.comprasGestionadas,
+      contrataciones: inf.contrataciones
     }));
   };
 
-  const exportHTML = () => {
-    if (!currentWeek) return;
-    
-    const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Informe DRAI - Semana ${currentWeek.semana}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f5f5f5; padding: 24px; color: #1a1a1a; }
-    .header { background: linear-gradient(135deg, #1B5E20, #2E7D32); color: white; padding: 32px; border-radius: 16px; margin-bottom: 24px; }
-    .header h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
-    .header p { opacity: 0.9; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid #1B5E20; }
-    .card-title { font-size: 13px; color: #666; margin-bottom: 8px; }
-    .card-value { font-size: 32px; font-weight: 800; color: #1B5E20; }
-    .section { background: white; padding: 24px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .section h3 { font-size: 16px; color: #1B5E20; margin-bottom: 16px; border-bottom: 2px solid #E8F5E9; padding-bottom: 12px; }
-    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-    .row:last-child { border-bottom: none; }
-    footer { text-align: center; color: #888; margin-top: 32px; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>📊 Informe Ejecutivo DRAI - Semana ${currentWeek.semana}</h1>
-    <p>Departamento de Recursos de Apoyo e Informática</p>
-    <p>Facultad de Ingeniería • Universidad de Antioquia</p>
-  </div>
-  
-  <div class="grid">
-    <div class="card">
-      <div class="card-title">🎥 Videoconferencias</div>
-      <div class="card-value">${currentWeek.videoconferencias}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">📡 Streamings</div>
-      <div class="card-value">${currentWeek.streamings}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">👥 Usuarios CENDOI</div>
-      <div class="card-value">${currentWeek.usuariosCENDOI}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">💻 Equipos Configurados</div>
-      <div class="card-value">${currentWeek.equiposConfigurados}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">🎓 Talento Tech</div>
-      <div class="card-value">${currentWeek.talentoTechMatriculas}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">🎨 Diseños</div>
-      <div class="card-value">${currentWeek.disenosRealizados}</div>
-    </div>
-  </div>
-  
-  <div class="section">
-    <h3>📋 Detalle por Áreas</h3>
-    <div class="row"><span>Videoconferencias realizadas</span><strong>${currentWeek.videoconferencias}</strong></div>
-    <div class="row"><span>Transmisiones streaming</span><strong>${currentWeek.streamings}</strong></div>
-    <div class="row"><span>Grabaciones</span><strong>${currentWeek.grabaciones}</strong></div>
-    <div class="row"><span>Solicitudes procesadas</span><strong>${currentWeek.solicitudesVideoconf}</strong></div>
-    <div class="row"><span>Equipos configurados/mantenimiento</span><strong>${currentWeek.equiposConfigurados}</strong></div>
-    <div class="row"><span>Reservas puntuales</span><strong>${currentWeek.reservasPuntuales}</strong></div>
-    <div class="row"><span>Activaciones de licencia</span><strong>${currentWeek.activacionesLicencia}</strong></div>
-    <div class="row"><span>Atención vía correo</span><strong>${currentWeek.atencionCorreo}</strong></div>
-    <div class="row"><span>Usuarios CENDOI atendidos</span><strong>${currentWeek.usuariosCENDOI}</strong></div>
-    <div class="row"><span>PCs prestados</span><strong>${currentWeek.pcs}</strong></div>
-    <div class="row"><span>Diademas prestadas</span><strong>${currentWeek.diademas}</strong></div>
-    <div class="row"><span>Compras gestionadas</span><strong>${currentWeek.comprasGestionadas}</strong></div>
-    <div class="row"><span>Procesos de contratación</span><strong>${currentWeek.contrataciones}</strong></div>
-  </div>
-  
-  <footer>
-    Generado por DRAI Dashboard © 2025 | Facultad de Ingeniería - Universidad de Antioquia
-  </footer>
-</body>
-</html>`;
-    
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Informe_DRAI_Semana_${currentWeek.semana}.html`;
-    a.click();
+  const getAreasData = () => {
+    if (!currentWeek) return [];
+    return [
+      { area: 'Videoconf.', value: currentWeek.videoconferencias },
+      { area: 'Sistemas', value: currentWeek.proyectosActivos },
+      { area: 'Soporte', value: currentWeek.equiposConfigurados },
+      { area: 'Regiones', value: currentWeek.area4?.totales?.soporteEmailFacultad || 0 },
+      { area: 'CENDOI', value: Math.round(currentWeek.usuariosCENDOI / 10) },
+      { area: 'UGP', value: currentWeek.reunionesUGP },
+      { area: 'Ingeni@', value: currentWeek.talentoTechMatriculas },
+      { area: 'Producción', value: currentWeek.disenosRealizados },
+      { area: 'Admin.', value: currentWeek.comprasGestionadas + currentWeek.contrataciones }
+    ];
   };
 
   // ============================================
@@ -571,299 +855,220 @@ export default function DRAIDashboard() {
             </div>
           </div>
         </label>
-        
-        {informes.length > 0 && (
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <button onClick={exportHTML} style={{
-              padding: '14px 24px',
-              background: COLORS.primary,
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              fontWeight: 600,
-              fontSize: '14px',
-              cursor: 'pointer',
-              fontFamily: 'inherit'
-            }}>
-              📧 Exportar HTML para correo
-            </button>
-            <button onClick={() => window.print()} style={{
-              padding: '14px 24px',
-              background: 'white',
-              color: '#1a1a1a',
-              border: '1px solid #E0E0E0',
-              borderRadius: '12px',
-              fontWeight: 600,
-              fontSize: '14px',
-              cursor: 'pointer',
-              fontFamily: 'inherit'
-            }}>
-              📄 Exportar PDF
-            </button>
-          </div>
-        )}
       </section>
 
-      {/* Dashboard Content */}
-      <div id="dashboard-content">
-        {/* Vista Semanal */}
-        {currentWeek && view === 'semanal' && (
-          <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 32px 32px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      {/* Vista Semanal */}
+      {currentWeek && view === 'semanal' && (
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 32px 32px' }}>
+          {/* Header de semana */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            gap: '16px', 
+            marginBottom: '20px', 
+            flexWrap: 'wrap' 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>
                 📊 Informe Ejecutivo – Semana {currentWeek.semana}
               </h2>
-              {previousWeek && (
-                <span style={{
-                  background: 'linear-gradient(135deg, #FFD54F, #FFC107)',
-                  color: '#1B5E20',
-                  padding: '6px 14px',
-                  borderRadius: '20px',
-                  fontSize: '13px',
-                  fontWeight: 600
-                }}>
-                  Comparado con Semana {previousWeek.semana}
-                </span>
-              )}
-            </div>
-
-            {/* Main Metrics */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-              gap: '16px',
-              marginBottom: '24px'
-            }}>
-              <MetricCard title="Videoconferencias" value={currentWeek.videoconferencias} change={calcChange(currentWeek.videoconferencias, previousWeek?.videoconferencias)} icon="🎥" color={COLORS.primary} />
-              <MetricCard title="Streamings" value={currentWeek.streamings} change={calcChange(currentWeek.streamings, previousWeek?.streamings)} icon="📡" color={COLORS.secondary} />
-              <MetricCard title="Usuarios CENDOI" value={currentWeek.usuariosCENDOI} change={calcChange(currentWeek.usuariosCENDOI, previousWeek?.usuariosCENDOI)} icon="👥" color={COLORS.accent} />
-              <MetricCard title="Equipos Configurados" value={currentWeek.equiposConfigurados} change={calcChange(currentWeek.equiposConfigurados, previousWeek?.equiposConfigurados)} icon="💻" color={COLORS.warning} />
-              <MetricCard title="Talento Tech" value={currentWeek.talentoTechMatriculas} change={calcChange(currentWeek.talentoTechMatriculas, previousWeek?.talentoTechMatriculas)} icon="🎓" color={COLORS.purple} />
-              <MetricCard title="Diseños" value={currentWeek.disenosRealizados} change={calcChange(currentWeek.disenosRealizados, previousWeek?.disenosRealizados)} icon="🎨" color={COLORS.pink} />
-            </div>
-
-            {/* Charts */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-              <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>📊 Comparativa por Área</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={getAreaChartData()}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                    <XAxis dataKey="area" tick={{ fill: '#666', fontSize: 12 }} />
-                    <YAxis tick={{ fill: '#666', fontSize: 12 }} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="anterior" name="Semana Anterior" fill="#E0E0E0" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="actual" name="Semana Actual" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>⚡ Distribución de Carga Laboral</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <RadarChart data={getRadarData()}>
-                    <PolarGrid stroke="#e0e0e0" />
-                    <PolarAngleAxis dataKey="area" tick={{ fill: '#666', fontSize: 11 }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#999', fontSize: 10 }} />
-                    <Radar name="Carga %" dataKey="value" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.5} />
-                    <Tooltip />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Detail Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-              {/* Videoconferencia */}
-              <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
-                  🎥 Apoyo Logístico y Videoconferencia
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {[
-                    { v: currentWeek.videoconferencias, l: 'Videoconferencias' },
-                    { v: currentWeek.streamings, l: 'Streamings' },
-                    { v: currentWeek.grabaciones, l: 'Grabaciones' },
-                    { v: currentWeek.solicitudesVideoconf, l: 'Solicitudes' }
-                  ].map((item, i) => (
-                    <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                      <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{item.v}</span>
-                      <span style={{ fontSize: '11px', color: '#888' }}>{item.l}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Soporte */}
-              <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
-                  💻 Soporte Telemático
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  {[
-                    { v: currentWeek.equiposConfigurados, l: 'Equipos' },
-                    { v: currentWeek.reservasPuntuales, l: 'Reservas' },
-                    { v: currentWeek.activacionesLicencia, l: 'Licencias' },
-                    { v: currentWeek.atencionCorreo, l: 'Correos' }
-                  ].map((item, i) => (
-                    <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                      <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{item.v}</span>
-                      <span style={{ fontSize: '11px', color: '#888' }}>{item.l}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* CENDOI */}
-              <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
-                  📚 Gestión Documental CENDOI
-                </h3>
-                <div style={{ 
-                  textAlign: 'center', 
-                  padding: '20px', 
-                  background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, 
-                  borderRadius: '12px',
-                  color: 'white',
-                  marginBottom: '12px'
-                }}>
-                  <span style={{ display: 'block', fontSize: '36px', fontWeight: 800 }}>{currentWeek.usuariosCENDOI}</span>
-                  <span style={{ fontSize: '13px', opacity: 0.9 }}>Usuarios Atendidos</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                  {[
-                    { v: currentWeek.pcs, l: 'PCs' },
-                    { v: currentWeek.diademas, l: 'Diademas' },
-                    { v: currentWeek.libros, l: 'Libros' }
-                  ].map((item, i) => (
-                    <div key={i} style={{ textAlign: 'center', padding: '10px', background: '#f8f8f8', borderRadius: '8px' }}>
-                      <span style={{ display: 'block', fontSize: '18px', fontWeight: 700, color: COLORS.primary }}>{item.v}</span>
-                      <span style={{ fontSize: '10px', color: '#888' }}>{item.l}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Administrativa */}
-              <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
-                  📋 Gestión Administrativa
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                  {[
-                    { v: currentWeek.comprasGestionadas, l: 'Compras' },
-                    { v: currentWeek.contrataciones, l: 'Contrataciones' },
-                    { v: currentWeek.transferencias, l: 'Transferencias' }
-                  ].map((item, i) => (
-                    <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#f8f8f8', borderRadius: '8px' }}>
-                      <span style={{ display: 'block', fontSize: '24px', fontWeight: 800, color: COLORS.primary }}>{item.v}</span>
-                      <span style={{ fontSize: '11px', color: '#888' }}>{item.l}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Vista Anual */}
-        {informes.length > 0 && view === 'anual' && (
-          <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 32px 32px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>📈 Consolidado Anual 2025</h2>
-              <span style={{ background: 'linear-gradient(135deg, #FFD54F, #FFC107)', color: '#1B5E20', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 600 }}>
-                {informes.length} semanas analizadas
+              <span style={{
+                background: 'linear-gradient(135deg, #FFD54F, #FFC107)',
+                color: '#1B5E20',
+                padding: '6px 14px',
+                borderRadius: '20px',
+                fontSize: '13px',
+                fontWeight: 600
+              }}>
+                {currentWeek.fecha}
               </span>
             </div>
-
-            {/* Summary */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-              {[
-                { icon: '🎥', value: informes.reduce((s, i) => s + i.videoconferencias, 0), label: 'Total Videoconferencias' },
-                { icon: '👥', value: informes.reduce((s, i) => s + i.usuariosCENDOI, 0).toLocaleString(), label: 'Usuarios CENDOI' },
-                { icon: '💻', value: informes.reduce((s, i) => s + i.equiposConfigurados, 0), label: 'Equipos Configurados' },
-                { icon: '🎓', value: informes.reduce((s, i) => s + i.talentoTechMatriculas, 0), label: 'Talento Tech' },
-              ].map((item, i) => (
-                <div key={i} style={{
-                  background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`,
-                  borderRadius: '16px',
-                  padding: '24px',
-                  textAlign: 'center',
-                  color: 'white',
-                  boxShadow: '0 4px 16px rgba(27,94,32,0.3)'
-                }}>
-                  <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>{item.icon}</span>
-                  <span style={{ fontSize: '36px', fontWeight: 800, display: 'block', fontFamily: 'monospace' }}>{item.value}</span>
-                  <span style={{ fontSize: '13px', opacity: 0.9, marginTop: '8px', display: 'block' }}>{item.label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Trend */}
-            <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>📊 Tendencia de Actividades</h3>
-              <ResponsiveContainer width="100%" height={400}>
-                <AreaChart data={getTrendData()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="semana" tick={{ fill: '#666', fontSize: 10 }} />
-                  <YAxis tick={{ fill: '#666', fontSize: 12 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Area type="monotone" dataKey="videoconferencias" name="Videoconferencias" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.3} />
-                  <Area type="monotone" dataKey="usuarios" name="Usuarios CENDOI (x10)" stroke={COLORS.secondary} fill={COLORS.secondary} fillOpacity={0.3} />
-                  <Area type="monotone" dataKey="soporte" name="Equipos Soporte" stroke={COLORS.accent} fill={COLORS.accent} fillOpacity={0.3} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-              {[
-                { title: '🎥 Videoconferencia', stats: [
-                  { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.videoconferencias, 0) / informes.length) },
-                  { l: 'Máximo', v: Math.max(...informes.map(i => i.videoconferencias)) },
-                  { l: 'Mínimo', v: Math.min(...informes.map(i => i.videoconferencias)) }
-                ]},
-                { title: '📚 CENDOI', stats: [
-                  { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.usuariosCENDOI, 0) / informes.length) },
-                  { l: 'Máximo', v: Math.max(...informes.map(i => i.usuariosCENDOI)) },
-                  { l: 'Mínimo', v: Math.min(...informes.map(i => i.usuariosCENDOI)) }
-                ]},
-                { title: '💻 Soporte', stats: [
-                  { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.equiposConfigurados, 0) / informes.length) },
-                  { l: 'Máximo', v: Math.max(...informes.map(i => i.equiposConfigurados)) },
-                  { l: 'Mínimo', v: Math.min(...informes.map(i => i.equiposConfigurados)) }
-                ]},
-                { title: '📋 Administrativa', stats: [
-                  { l: 'Compras promedio', v: Math.round(informes.reduce((s, i) => s + i.comprasGestionadas, 0) / informes.length) },
-                  { l: 'Contrataciones totales', v: informes.reduce((s, i) => s + i.contrataciones, 0) },
-                  { l: 'Transferencias totales', v: informes.reduce((s, i) => s + i.transferencias, 0) }
-                ]}
-              ].map((section, i) => (
-                <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-                  <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px' }}>{section.title}</h4>
-                  {section.stats.map((stat, j) => (
-                    <div key={j} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: j < section.stats.length - 1 ? '1px solid #eee' : 'none', fontSize: '14px' }}>
-                      <span style={{ color: '#666' }}>{stat.l}:</span>
-                      <strong style={{ color: COLORS.primary, fontFamily: 'monospace' }}>{stat.v}</strong>
-                    </div>
-                  ))}
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={expandAll} style={{
+                padding: '8px 16px',
+                background: COLORS.primary,
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}>Expandir todo</button>
+              <button onClick={collapseAll} style={{
+                padding: '8px 16px',
+                background: '#eee',
+                color: '#333',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}>Colapsar todo</button>
             </div>
           </div>
-        )}
 
-        {/* Empty State */}
-        {informes.length === 0 && (
-          <div style={{ maxWidth: '500px', margin: '60px auto', textAlign: 'center', padding: '60px 32px', background: 'white', borderRadius: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-            <span style={{ fontSize: '64px', display: 'block', marginBottom: '20px', opacity: 0.5 }}>📂</span>
-            <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>No hay informes cargados</h3>
-            <p style={{ color: '#666', fontSize: '15px' }}>Sube los archivos .docx de los informes semanales</p>
+          {/* Resumen rápido */}
+          <QuickSummary data={currentWeek} />
+
+          {/* Gráfico de barras por área */}
+          <div style={{ 
+            background: 'white', 
+            borderRadius: '16px', 
+            padding: '24px', 
+            marginBottom: '24px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
+          }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>
+              📊 Actividad por Área
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={getAreasData()}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis dataKey="area" tick={{ fill: '#666', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#666', fontSize: 12 }} />
+                <Tooltip />
+                <Bar dataKey="value" fill={COLORS.primary} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-        )}
-      </div>
+
+          {/* Las 9 áreas expandibles */}
+          <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>
+            📋 Detalle por Áreas (9 áreas)
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {[
+              { key: 'area1', name: currentWeek.area1?.nombre },
+              { key: 'area2', name: currentWeek.area2?.nombre },
+              { key: 'area3', name: currentWeek.area3?.nombre },
+              { key: 'area4', name: currentWeek.area4?.nombre },
+              { key: 'area5', name: currentWeek.area5?.nombre },
+              { key: 'area6', name: currentWeek.area6?.nombre },
+              { key: 'area7', name: currentWeek.area7?.nombre },
+              { key: 'area8', name: currentWeek.area8?.nombre },
+              { key: 'area9', name: currentWeek.area9?.nombre }
+            ].map((area, index) => (
+              <AreaCard
+                key={area.key}
+                area={area.name}
+                index={index}
+                data={currentWeek[area.key]}
+                previousData={previousWeek?.[area.key]}
+                expanded={expandedAreas[index]}
+                onToggle={() => toggleArea(index)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Vista Anual */}
+      {informes.length > 0 && view === 'anual' && (
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 32px 32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>📈 Consolidado Anual 2025</h2>
+            <span style={{ background: 'linear-gradient(135deg, #FFD54F, #FFC107)', color: '#1B5E20', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 600 }}>
+              {informes.length} semanas analizadas
+            </span>
+          </div>
+
+          {/* Totales del año */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+            gap: '16px', 
+            marginBottom: '24px' 
+          }}>
+            {[
+              { icon: '🎥', value: informes.reduce((s, i) => s + i.videoconferencias, 0), label: 'Total Videoconferencias' },
+              { icon: '👥', value: informes.reduce((s, i) => s + i.usuariosCENDOI, 0).toLocaleString(), label: 'Usuarios CENDOI' },
+              { icon: '💻', value: informes.reduce((s, i) => s + i.equiposConfigurados, 0), label: 'Equipos Configurados' },
+              { icon: '🎓', value: informes.reduce((s, i) => s + i.talentoTechMatriculas, 0), label: 'Talento Tech' },
+              { icon: '🛒', value: informes.reduce((s, i) => s + i.comprasGestionadas, 0), label: 'Compras Gestionadas' },
+              { icon: '📝', value: informes.reduce((s, i) => s + i.contrataciones, 0), label: 'Contrataciones' }
+            ].map((item, i) => (
+              <div key={i} style={{
+                background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`,
+                borderRadius: '16px',
+                padding: '24px',
+                textAlign: 'center',
+                color: 'white',
+                boxShadow: '0 4px 16px rgba(27,94,32,0.3)'
+              }}>
+                <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>{item.icon}</span>
+                <span style={{ fontSize: '32px', fontWeight: 800, display: 'block', fontFamily: 'monospace' }}>{item.value}</span>
+                <span style={{ fontSize: '12px', opacity: 0.9, marginTop: '8px', display: 'block' }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Gráfico de tendencias */}
+          <div style={{ background: 'white', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', marginBottom: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>📊 Tendencia de Actividades</h3>
+            <ResponsiveContainer width="100%" height={400}>
+              <AreaChart data={getTrendData()}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis dataKey="semana" tick={{ fill: '#666', fontSize: 10 }} />
+                <YAxis tick={{ fill: '#666', fontSize: 12 }} />
+                <Tooltip />
+                <Legend />
+                <Area type="monotone" dataKey="videoconferencias" name="Videoconferencias" stroke={COLORS.primary} fill={COLORS.primary} fillOpacity={0.3} />
+                <Area type="monotone" dataKey="usuarios" name="Usuarios CENDOI (x10)" stroke={COLORS.secondary} fill={COLORS.secondary} fillOpacity={0.3} />
+                <Area type="monotone" dataKey="soporte" name="Equipos Soporte" stroke={COLORS.accent} fill={COLORS.accent} fillOpacity={0.3} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Estadísticas por área */}
+          <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>📋 Estadísticas por Área</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+            {[
+              { title: '🎥 Videoconferencia', icon: AREA_ICONS[0], color: AREA_COLORS[0], stats: [
+                { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.videoconferencias, 0) / informes.length) },
+                { l: 'Máximo', v: Math.max(...informes.map(i => i.videoconferencias)) },
+                { l: 'Mínimo', v: Math.min(...informes.map(i => i.videoconferencias)) }
+              ]},
+              { title: '📚 CENDOI', icon: AREA_ICONS[4], color: AREA_COLORS[4], stats: [
+                { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.usuariosCENDOI, 0) / informes.length) },
+                { l: 'Máximo', v: Math.max(...informes.map(i => i.usuariosCENDOI)) },
+                { l: 'Mínimo', v: Math.min(...informes.map(i => i.usuariosCENDOI)) }
+              ]},
+              { title: '🔧 Soporte', icon: AREA_ICONS[2], color: AREA_COLORS[2], stats: [
+                { l: 'Promedio semanal', v: Math.round(informes.reduce((s, i) => s + i.equiposConfigurados, 0) / informes.length) },
+                { l: 'Máximo', v: Math.max(...informes.map(i => i.equiposConfigurados)) },
+                { l: 'Mínimo', v: Math.min(...informes.map(i => i.equiposConfigurados)) }
+              ]},
+              { title: '📁 Administrativa', icon: AREA_ICONS[8], color: AREA_COLORS[8], stats: [
+                { l: 'Compras promedio', v: Math.round(informes.reduce((s, i) => s + i.comprasGestionadas, 0) / informes.length) },
+                { l: 'Contrataciones totales', v: informes.reduce((s, i) => s + i.contrataciones, 0) },
+                { l: 'Transferencias totales', v: informes.reduce((s, i) => s + i.transferencias, 0) }
+              ]}
+            ].map((section, i) => (
+              <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)', borderLeft: `4px solid ${section.color}` }}>
+                <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {section.title}
+                </h4>
+                {section.stats.map((stat, j) => (
+                  <div key={j} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: j < section.stats.length - 1 ? '1px solid #eee' : 'none', fontSize: '14px' }}>
+                    <span style={{ color: '#666' }}>{stat.l}:</span>
+                    <strong style={{ color: section.color, fontFamily: 'monospace' }}>{stat.v}</strong>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {informes.length === 0 && (
+        <div style={{ maxWidth: '500px', margin: '60px auto', textAlign: 'center', padding: '60px 32px', background: 'white', borderRadius: '24px', boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+          <span style={{ fontSize: '64px', display: 'block', marginBottom: '20px', opacity: 0.5 }}>📂</span>
+          <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>No hay informes cargados</h3>
+          <p style={{ color: '#666', fontSize: '15px' }}>Sube los archivos .docx de los informes semanales para ver el dashboard completo con las 9 áreas</p>
+        </div>
+      )}
 
       {/* Footer */}
       <footer style={{ maxWidth: '1400px', margin: '40px auto 0', padding: '24px 32px', textAlign: 'center', borderTop: '1px solid #E8E8E8' }}>
