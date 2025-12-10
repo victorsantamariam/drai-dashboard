@@ -134,8 +134,17 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
   // ============================================
   
   const soporteTelefonico = /Atención de llamadas/i.test(text);
-  const soporteEmailFacultad = extractNumber(/Respuesta.*correos.*-(\d+)/i) || 
-                               (text.match(/Respuesta a diferentes cuentas de correos/i) ? 1 : 0);
+  let soporteEmailFacultad = extractNumber(/Respuesta.*correos.*?-\s*(\d{1,3})\s/i) ||
+                              extractNumber(/correos.*?(\d{1,2})\s*$/im) ||
+                              (text.match(/Respuesta a diferentes cuentas de correos/i) ? 1 : 0);
+
+  // Validar rango razonable para soporte email (máximo 200 por semana)
+  if (soporteEmailFacultad > 200) {
+    console.warn(`⚠️ Soporte email fuera de rango en semana ${weekNumber}: ${soporteEmailFacultad} → 0`);
+    soporteEmailFacultad = 0;
+  }
+
+  console.log(`📞 Soporte Regiones (Semana ${weekNumber}): Email=${soporteEmailFacultad}`);
   
   // Detectar proyectos activos en esta área
   const proyectosRegiones = {
@@ -256,13 +265,28 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
     proyectoCGR: /Proyecto.*CGR/i.test(text)
   };
 
-  // Métricas Ingeni@
-  const talentoTechMatriculas = extractNumber(/Talento Tech[^\d]*(\d+)/i);
-  const pruebasInicio = extractNumber(/pruebas de inicio[^\d]*(\d+)/i);
-  const storiesRedes = extractNumber(/Stories.*redes.*sociales[^\d]*(\d+)/i);
-  const reportesHorasCatedra = extractNumber(/reportes de horas.*cátedra[^\d]*(\d+)/i);
-  const pqrsAtendidas = extractNumber(/Respuesta.*PQRS[^\d]*(\d+)/i) || extractNumber(/PQRS[^\d]*(\d+)/i);
-  const acompInterventoria = extractNumber(/Acompañamiento interventoría[^\d]*(\d+)/i);
+  // Métricas Ingeni@ - patrones más específicos para evitar capturar números grandes incorrectos
+  const talentoTechMatriculas = extractNumber(/(?:matrículas?|estudiantes?).*Talento Tech[^\d]*(\d{1,4})/i) ||
+                                extractNumber(/Talento Tech[^\d]{0,20}(\d{1,4})\s*(?:matrículas?|estudiantes?)/i);
+  const pruebasInicio = extractNumber(/pruebas de inicio[^\d]{0,10}(\d{1,3})/i);
+  const storiesRedes = extractNumber(/Stories.*redes.*sociales[^\d]{0,10}(\d{1,3})/i);
+  const reportesHorasCatedra = extractNumber(/reportes de horas.*cátedra[^\d]{0,10}(\d{1,3})/i);
+  const pqrsAtendidas = extractNumber(/(?:Respuesta|Atención).*PQRS[^\d]{0,10}(\d{1,3})/i) ||
+                        extractNumber(/PQRS[^\d]{0,10}(\d{1,3})\s*(?:atendidas?|respondidas?)/i);
+  const acompInterventoria = extractNumber(/Acompañamiento interventoría[^\d]{0,10}(\d{1,3})/i);
+
+  // Validación de rangos razonables para evitar números absurdos
+  const pqrsValidadas = pqrsAtendidas > 0 && pqrsAtendidas < 500 ? pqrsAtendidas : 0;
+  const matriculasValidadas = talentoTechMatriculas > 0 && talentoTechMatriculas < 10000 ? talentoTechMatriculas : 0;
+
+  if (pqrsAtendidas !== pqrsValidadas) {
+    console.warn(`⚠️ PQRS fuera de rango en semana ${weekNumber}: ${pqrsAtendidas} → 0`);
+  }
+  if (talentoTechMatriculas !== matriculasValidadas) {
+    console.warn(`⚠️ Matrículas fuera de rango en semana ${weekNumber}: ${talentoTechMatriculas} → 0`);
+  }
+
+  console.log(`📊 Ingeni@ (Semana ${weekNumber}): PQRS=${pqrsValidadas}, TalentoTech=${matriculasValidadas}, Stories=${storiesRedes}`);
 
   // ============================================
   // 8. PRODUCCIÓN
@@ -416,7 +440,7 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
         proyectoPTIES: { nombre: 'Proyecto PTIES-Administrativo', activo: ingeniaActividades.proyectoPTIES },
         proyectoCGR: { nombre: 'Proyecto CGR-Administrativo', activo: ingeniaActividades.proyectoCGR }
       },
-      totales: { talentoTechMatriculas, pruebasInicio, storiesRedes, reportesHorasCatedra, pqrsAtendidas, acompInterventoria }
+      totales: { talentoTechMatriculas: matriculasValidadas, pruebasInicio, storiesRedes, reportesHorasCatedra, pqrsAtendidas: pqrsValidadas, acompInterventoria }
     },
 
     // 8. Producción
@@ -459,8 +483,8 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
     pcs,
     diademas,
     reunionesUGP,
-    talentoTechMatriculas,
-    pqrsAtendidas,
+    talentoTechMatriculas: matriculasValidadas,
+    pqrsAtendidas: pqrsValidadas,
     disenosRealizados,
     comprasGestionadas,
     contrataciones,
