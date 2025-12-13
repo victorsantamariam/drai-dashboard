@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import * as mammoth from 'mammoth';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line
@@ -12,13 +14,25 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlContent, 'text/html');
   const text = doc.body.textContent || '';
-  
-  // Helper: contar actividades (bullets/items) en una sección
-  const countActivities = (sectionText) => {
-    if (!sectionText) return 0;
-    // Contar todos los bullets, no solo los que empiezan con mayúscula
-    const matches = sectionText.match(/-\s+\S/g) || [];
-    return matches.length;
+
+  // Helper: contar actividades (bullets/items) en el DOM HTML
+  const countActivitiesInHTML = (htmlFragment) => {
+    if (!htmlFragment) return 0;
+    const tempDoc = parser.parseFromString(htmlFragment, 'text/html');
+    const listItems = tempDoc.querySelectorAll('li');
+    return listItems.length;
+  };
+
+  // Helper: extraer sección HTML entre dos headers
+  const extractHTMLSection = (startText, endText = null) => {
+    const htmlLower = htmlContent.toLowerCase();
+    const startIdx = htmlLower.indexOf(startText.toLowerCase());
+    if (startIdx === -1) return null;
+
+    const endIdx = endText ? htmlLower.indexOf(endText.toLowerCase(), startIdx + 1) : htmlContent.length;
+    if (endIdx === -1) return htmlContent.substring(startIdx);
+
+    return htmlContent.substring(startIdx, endIdx);
   };
 
   // Helper: extraer número de un patrón
@@ -39,43 +53,37 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
   // ============================================
   // 1. APOYO LOGÍSTICO Y VIDEOCONFERENCIA
   // ============================================
+
+  // Extraer secciones HTML y contar <li> items
+  const logisticoHTML = extractHTMLSection('Logístico', 'Académico');
+  const academicoHTML = extractHTMLSection('Académico', 'Infraestructura');
+  const infraestructuraHTML = extractHTMLSection('Infraestructura', 'Videoconferencia');
+
+  const actividadesLogistico = countActivitiesInHTML(logisticoHTML);
+  const actividadesAcademico = countActivitiesInHTML(academicoHTML);
+  const actividadesInfraestructura = countActivitiesInHTML(infraestructuraHTML);
+
+  console.log(`📋 Logístico (Semana ${weekNumber}): ${actividadesLogistico} actividades`);
+  console.log(`🎓 Académico (Semana ${weekNumber}): ${actividadesAcademico} actividades`);
+  console.log(`🏗️ Infraestructura (Semana ${weekNumber}): ${actividadesInfraestructura} actividades`);
+
+  // Videoconferencia métricas - patrones múltiples para robustez
+  let horasVideoconferencias = extractNumber(/Total\s+(?:videoconferencias|horas)[^:]*:\s*(\d+)/i);
+  if (!horasVideoconferencias) horasVideoconferencias = extractNumber(/Total\s+(?:videoconferencias|horas)[^0-9]*(\d+)/i);
+  if (!horasVideoconferencias) horasVideoconferencias = extractNumber(/asistencia a\s*(\d+)\s*(?:horas|videoconferencias)/i);
   
-  // Logístico - contar actividades
-  let actividadesLogistico = 0;
-  const logisticoMatch = text.match(/Logístico\*?\*?([\s\S]*?)(?=Académico\*?\*?|Infraestructura\*?\*?|$)/i);
-  if (logisticoMatch) {
-    actividadesLogistico = countActivities(logisticoMatch[1]);
-    console.log(`📋 Logístico (Semana ${weekNumber}): ${actividadesLogistico} actividades`);
-  } else {
-    console.warn(`⚠️ No se encontró sección Logístico en semana ${weekNumber}`);
-  }
-
-  // Académico - contar actividades
-  let actividadesAcademico = 0;
-  const academicoMatch = text.match(/Académico\*?\*?([\s\S]*?)(?=Infraestructura\*?\*?|Videoconferencia\*?\*?|$)/i);
-  if (academicoMatch) {
-    actividadesAcademico = countActivities(academicoMatch[1]);
-    console.log(`🎓 Académico (Semana ${weekNumber}): ${actividadesAcademico} actividades`);
-  } else {
-    console.warn(`⚠️ No se encontró sección Académico en semana ${weekNumber}`);
-  }
-
-  // Infraestructura - contar actividades
-  let actividadesInfraestructura = 0;
-  const infraMatch = text.match(/(?:Infraestructura|Inf\s*raestructura)\*?\*?([\s\S]*?)(?=Videoconferencia\*?\*?|Video\s*conferencia|$)/i);
-  if (infraMatch) {
-    actividadesInfraestructura = countActivities(infraMatch[1]);
-    console.log(`🏗️ Infraestructura (Semana ${weekNumber}): ${actividadesInfraestructura} actividades`);
-  } else {
-    console.warn(`⚠️ No se encontró sección Infraestructura en semana ${weekNumber}`);
-  }
-
-  // Videoconferencia métricas
-  const videoconferencias = extractNumber(/asistencia a\s*(\d+)\s*videoconferencias/i);
-  const streamings = extractNumber(/Se realizan?\s*(\d+)\s*transmisiones?\s*de\s*streaming/i);
-  const grabaciones = extractNumber(/Se apoyan?\s*(\d+)\s*grabaciones/i);
+  let streamings = extractNumber(/Total\s+streamings[^:]*:\s*(\d+)/i);
+  if (!streamings) streamings = extractNumber(/Total\s+streamings[^0-9]*(\d+)/i);
+  if (!streamings) streamings = extractNumber(/Se realizan?\s*(\d+)\s*transmisiones?\s*de\s*streaming/i);
+  
+  let grabaciones = extractNumber(/Total\s+(?:grabaciones|grabación)[^:]*:\s*(\d+)/i);
+  if (!grabaciones) grabaciones = extractNumber(/Total\s+(?:grabaciones|grabación)[^0-9]*(\d+)/i);
+  if (!grabaciones) grabaciones = extractNumber(/Se apoyan?\s*(\d+)\s*grabaciones/i);
   const solicitudesVideoconf = extractNumber(/Se reciben\s*(\d+)\s*solicitudes/i);
   const eventosExtension = extractNumber(/(\d+)\s*eventos?\s*en\s*la\s*sala\s*de\s*videoconferencia/i);
+
+  console.log(`🎥 Videoconferencia (Semana ${weekNumber}): Horas=${horasVideoconferencias}, Streamings=${streamings}, Grabaciones=${grabaciones}`);
+  if (!horasVideoconferencias) console.warn(`⚠️ No se encontró patrón para videoconferencias en semana ${weekNumber}`);
 
   // ============================================
   // 2. GESTIÓN DE SISTEMAS DE INFORMACIÓN
@@ -98,9 +106,14 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
   
   const proyectosActivos = Object.values(proyectosSistemas).filter(Boolean).length;
   
-  // HUs completadas
-  const husCompletadas = (text.match(/Se completa.*HU-?\d+|HU-?\d+.*completa/gi) || []).length;
-  const husIniciadas = (text.match(/Se inicia.*HU-?\d+|HU-?\d+.*inicia/gi) || []).length;
+  // Actividades en Gestión de Sistemas - contar puntos (•) en la sección
+  // Extraer la sección completa de "Gestión de Sistemas de Información"
+  const sistemasSection = extractHTMLSection('Gestión de Sistemas', 'Soporte Telemático');
+  
+  // Contar todos los <li> items (puntos) en esa sección
+  const actividadesSistemas = sistemasSection ? countActivitiesInHTML(sistemasSection) : 0;
+  
+  console.log(`💻 Gestión de Sistemas (Semana ${weekNumber}): ${actividadesSistemas} actividades/puntos`);
 
   // ============================================
   // 3. SOPORTE TELEMÁTICO
@@ -183,12 +196,17 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
     const cendoiText = text.substring(cendoiStart, cendoiEnd);
 
     // Buscar en tabla: "número número número" (libros pcs diademas)
-    const tablaMatch = cendoiText.match(/(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})/);
-    if (tablaMatch) {
-      libros = parseInt(tablaMatch[1]);
-      pcs = parseInt(tablaMatch[2]);
-      diademas = parseInt(tablaMatch[3]);
-      console.log(`📚 CENDOI Préstamos (Semana ${weekNumber} - tabla): Libros=${libros}, PCs=${pcs}, Diademas=${diademas}`);
+    // Mejorado para buscar después de los headers "Libros", "PC", "Diademas"
+    const tablaHeaderMatch = cendoiText.match(/Libros\s+PC\s+Diademas/i);
+    if (tablaHeaderMatch) {
+      const afterHeader = cendoiText.substring(tablaHeaderMatch.index + tablaHeaderMatch[0].length);
+      const numerosMatch = afterHeader.match(/(\d{1,3})\s+(\d{1,3})\s+(\d{1,3})/);
+      if (numerosMatch) {
+        libros = parseInt(numerosMatch[1]);
+        pcs = parseInt(numerosMatch[2]);
+        diademas = parseInt(numerosMatch[3]);
+        console.log(`📚 CENDOI Préstamos (Semana ${weekNumber} - tabla): Libros=${libros}, PCs=${pcs}, Diademas=${diademas}`);
+      }
     }
 
     // Fallback: buscar menciones específicas
@@ -299,10 +317,15 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
     talentoTech: /Producción[\s\S]*?Talent/i.test(text)
   };
 
-  const disenosRealizados = (text.match(/[Dd]iseño de|[Dd]iseño y/g) || []).length;
-  const diagramaciones = (text.match(/diagramación/gi) || []).length;
-  const transmisiones = (text.match(/[Tt]ransmisión/g) || []).length;
-  const grabacionesProduccion = (text.match(/[Gg]rabación de/g) || []).length;
+  // Extraer sección de Producción para contar actividades
+  const produccionHTML = extractHTMLSection('Producción', 'Gestión Administrativa');
+
+  const disenosRealizados = produccionHTML ? countActivitiesInHTML(produccionHTML) : 0;
+  const diagramaciones = text.match(/diagramación/gi) ? (text.match(/diagramación/gi) || []).length : 0;
+  const transmisiones = text.match(/[Tt]ransmisión|[Rr]eunión para.*entrega completa/g) ? (text.match(/[Tt]ransmisión|[Rr]eunión para.*entrega completa/g) || []).length : 0;
+  const grabacionesProduccion = text.match(/[Gg]rabación de|Se realiza.*grabación/g) ? (text.match(/[Gg]rabación de|Se realiza.*grabación/g) || []).length : 0;
+
+  console.log(`🎨 Producción (Semana ${weekNumber}): Diseños=${disenosRealizados}, Diagramaciones=${diagramaciones}, Transmisiones=${transmisiones}, Grabaciones=${grabacionesProduccion}`);
 
   // ============================================
   // 9. GESTIÓN ADMINISTRATIVA
@@ -316,11 +339,43 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
     varios: /Varios/i.test(text)
   };
 
-  const comprasGestionadas = (text.match(/[Ss]olicitud de [Cc]ompra|[Ss]olicitud [Cc]ompra/g) || []).length;
-  const contrataciones = (text.match(/[Ee]xoneración|[Cc]reación [Tt]erceros|contratos? (?:cátedra|firmados?)/gi) || []).length;
-  const transferencias = (text.match(/[Ss]olicitud.*[Tt]ransferencia|[Tt]ransferencia para/gi) || []).length;
+  // Extraer sección completa de Gestión Administrativa
+  const adminHTML = extractHTMLSection('Gestión Administrativa', null);
+
+  // Helper para extraer subsecciones dentro del HTML de admin
+  const extractSubsection = (htmlFragment, startText, endText) => {
+    if (!htmlFragment) return null;
+    const lowerHTML = htmlFragment.toLowerCase();
+    const startIdx = lowerHTML.indexOf(startText.toLowerCase());
+    if (startIdx === -1) return null;
+
+    const endIdx = endText ? lowerHTML.indexOf(endText.toLowerCase(), startIdx + 1) : htmlFragment.length;
+    if (endIdx === -1) return htmlFragment.substring(startIdx);
+
+    return htmlFragment.substring(startIdx, endIdx);
+  };
+
+  // Extraer subsecciones HTML dentro de Gestión Administrativa
+  const transferenciasHTML = extractSubsection(adminHTML, 'Transferencia', 'SEA');
+  const transferencias = countActivitiesInHTML(transferenciasHTML);
+
+  const seaHTML = extractSubsection(adminHTML, 'SEA', 'Contratación');
+  const actividadesSEA = countActivitiesInHTML(seaHTML);
+
+  const contratacionHTML = extractSubsection(adminHTML, 'Contratación', 'Compras');
+  const contrataciones = countActivitiesInHTML(contratacionHTML);
+
+  const comprasHTML = extractSubsection(adminHTML, 'Compras', 'Varios');
+  const comprasGestionadas = countActivitiesInHTML(comprasHTML);
+
+  const variosHTML = extractSubsection(adminHTML, 'Varios', null);
+  const actividadesVarios = countActivitiesInHTML(variosHTML);
+
+  // Métricas específicas
   const avalesPago = (text.match(/[Aa]val para pago|AVAL PARA PAGO/g) || []).length;
   const liberacionPlazas = (text.match(/[Ll]iberación [Pp]laza/g) || []).length;
+
+  console.log(`📁 Gestión Admin (Semana ${weekNumber}): Compras=${comprasGestionadas}, Contrataciones=${contrataciones}, Transferencias=${transferencias}, SEA=${actividadesSEA}, Varios=${actividadesVarios}`);
 
   // ============================================
   // RETORNO COMPLETO
@@ -337,12 +392,12 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
         academico: { nombre: 'Académico', valor: actividadesAcademico, descripcion: 'actividades' },
         infraestructura: { nombre: 'Infraestructura', valor: actividadesInfraestructura, descripcion: 'actividades' },
         videoconferencia: { 
-          nombre: 'Videoconferencia', 
-          valor: videoconferencias,
+          nombre: 'Total horas videoconferencia', 
+          valor: horasVideoconferencias,
           detalles: { streamings, grabaciones, solicitudesVideoconf, eventosExtension }
         }
       },
-      totales: { videoconferencias, streamings, grabaciones, solicitudesVideoconf }
+      totales: { horasVideoconferencias, streamings, grabaciones, solicitudesVideoconf }
     },
 
     // 2. Gestión de Sistemas de Información
@@ -361,7 +416,7 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
         salasInfo: { nombre: 'Salas Info', activo: proyectosSistemas.salasInfo },
         sigac: { nombre: 'SIGAC+', activo: proyectosSistemas.sigac }
       },
-      totales: { proyectosActivos, husCompletadas, husIniciadas }
+      totales: { proyectosActivos, actividadesSistemas }
     },
 
     // 3. Soporte Telemático
@@ -462,14 +517,14 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
         contratacion: { nombre: 'Contratación', valor: contrataciones },
         compras: { nombre: 'Compras', valor: comprasGestionadas },
         transferencias: { nombre: 'Transferencia', valor: transferencias },
-        sea: { nombre: 'SEA', valor: liberacionPlazas },
-        varios: { nombre: 'Varios', valor: avalesPago }
+        sea: { nombre: 'SEA', valor: actividadesSEA },
+        varios: { nombre: 'Varios', valor: actividadesVarios }
       },
-      totales: { comprasGestionadas, contrataciones, transferencias, avalesPago, liberacionPlazas }
+      totales: { comprasGestionadas, contrataciones, transferencias, avalesPago, liberacionPlazas, actividadesSEA, actividadesVarios }
     },
 
     // Métricas legacy para compatibilidad
-    videoconferencias,
+    videoconferencias: horasVideoconferencias,
     streamings,
     grabaciones,
     solicitudesVideoconf,
@@ -669,7 +724,7 @@ const QuickSummary = ({ data }) => {
   if (!data) return null;
 
   const summaryItems = [
-    { icon: '🎥', label: 'Videoconferencias', value: data.videoconferencias, color: COLORS.primary },
+    { icon: '🎥', label: 'Horas videoconferencia', value: data.videoconferencias, color: COLORS.primary },
     { icon: '📡', label: 'Streamings', value: data.streamings, color: COLORS.secondary },
     { icon: '👥', label: 'Usuarios CENDOI', value: data.usuariosCENDOI, color: COLORS.accent },
     { icon: '💻', label: 'Equipos', value: data.equiposConfigurados, color: COLORS.blue },
@@ -716,6 +771,7 @@ export default function DRAIDashboard() {
   const [view, setView] = useState('semanal');
   const [loading, setLoading] = useState(false);
   const [expandedAreas, setExpandedAreas] = useState({});
+  const reporteRef = useRef(null);
 
   const toggleArea = (index) => {
     setExpandedAreas(prev => ({
@@ -732,6 +788,219 @@ export default function DRAIDashboard() {
 
   const collapseAll = () => {
     setExpandedAreas({});
+  };
+
+  // ============================================
+  // FUNCIONES DE EXPORTACIÓN
+  // ============================================
+
+  const exportToImage = async () => {
+    if (!reporteRef.current || informes.length === 0) {
+      alert('No hay reporte para exportar');
+      return;
+    }
+
+    try {
+      const canvas = await html2canvas(reporteRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        allowTaint: true,
+        useCORS: true
+      });
+
+      const image = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `Reporte_DRAI_Anual_${new Date().toISOString().split('T')[0]}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error al exportar imagen:', error);
+      alert('Error al generar la imagen');
+    }
+  };
+
+  const exportToPDF = async () => {
+    if (!reporteRef.current || informes.length === 0) {
+      alert('No hay reporte para exportar');
+      return;
+    }
+
+    try {
+      const canvas = await html2canvas(reporteRef.current, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        allowTaint: true,
+        useCORS: true
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgWidth = 280;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+      heightLeft -= pdf.internal.pageSize.getHeight();
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+        heightLeft -= pdf.internal.pageSize.getHeight();
+      }
+
+      pdf.save(`Reporte_DRAI_Anual_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (error) {
+      console.error('Error al exportar PDF:', error);
+      alert('Error al generar el PDF');
+    }
+  };
+
+  const exportToHTML = () => {
+    if (informes.length === 0) {
+      alert('No hay informes para exportar');
+      return;
+    }
+
+    let htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte DRAI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 { color: #1a5276; text-align: center; border-bottom: 3px solid #1a5276; padding-bottom: 10px; }
+        h2 { color: #2e7d32; margin-top: 30px; border-left: 4px solid #2e7d32; padding-left: 10px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        th {
+            background-color: #1a5276;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:hover { background-color: #f5f5f5; }
+        .semana { font-weight: bold; color: #1a5276; }
+        .total { background-color: #e3f2fd; font-weight: bold; }
+        .section { background-color: #f9f9f9; margin: 20px 0; padding: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>📊 REPORTE DRAI - INFORMES SEMANALES</h1>
+    <p style="text-align: center; color: #666;">Departamento de Recursos de Apoyo e Informática</p>
+    <p style="text-align: center; color: #666;">Facultad de Ingeniería • Universidad de Antioquia</p>
+    <p style="text-align: center; color: #666;">Generado el: ${new Date().toLocaleString('es-ES')}</p>
+`;
+
+    // Tabla resumen
+    htmlContent += `<h2>📋 Resumen General</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Semana</th>
+                <th>Fecha</th>
+                <th>Horas Videoconferencia</th>
+                <th>Streamings</th>
+                <th>Usuarios CENDOI</th>
+                <th>Equipos Configurados</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    informes.forEach(inf => {
+        htmlContent += `
+            <tr>
+                <td class="semana">${inf.semana}</td>
+                <td>${inf.fecha}</td>
+                <td>${inf.videoconferencias || 0}</td>
+                <td>${inf.streamings || 0}</td>
+                <td>${inf.usuariosCENDOI || 0}</td>
+                <td>${inf.equiposConfigurados || 0}</td>
+            </tr>`;
+    });
+
+    htmlContent += `
+        </tbody>
+    </table>`;
+
+    // Detalles por semana
+    informes.forEach(inf => {
+        htmlContent += `
+        <div class="section">
+            <h2>Semana ${inf.semana} - ${inf.fecha}</h2>
+            <h3>Área 1: Apoyo Logístico y Videoconferencia</h3>
+            <ul>
+                <li>Actividades Logístico: ${inf.area1?.subactividades?.logistico?.valor || 0}</li>
+                <li>Actividades Académico: ${inf.area1?.subactividades?.academico?.valor || 0}</li>
+                <li>Actividades Infraestructura: ${inf.area1?.subactividades?.infraestructura?.valor || 0}</li>
+                <li>Horas Videoconferencia: ${inf.videoconferencias || 0}</li>
+                <li>Streamings: ${inf.streamings || 0}</li>
+                <li>Grabaciones: ${inf.grabaciones || 0}</li>
+            </ul>
+        </div>`;
+    });
+
+    htmlContent += `
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Reporte_DRAI_${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportToCSV = () => {
+    if (informes.length === 0) {
+      alert('No hay informes para exportar');
+      return;
+    }
+
+    let csvContent = 'Semana,Fecha,Horas Videoconferencia,Streamings,Grabaciones,Usuarios CENDOI,Proyectos Activos,Actividades Sistemas,Equipos Configurados\n';
+
+    informes.forEach(inf => {
+        csvContent += `${inf.semana},"${inf.fecha}",${inf.videoconferencias || 0},${inf.streamings || 0},${inf.grabaciones || 0},${inf.usuariosCENDOI || 0},${inf.proyectosActivos || 0},${inf.area2?.totales?.actividadesSistemas || 0},${inf.equiposConfigurados || 0}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Reporte_DRAI_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   // Cargar archivo .docx
@@ -891,6 +1160,84 @@ export default function DRAIDashboard() {
               }}
             >📈 Anual</button>
           </div>
+
+          {/* Botones de Exportación */}
+          {informes.length > 0 && (
+            <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.15)', padding: '4px', borderRadius: '14px' }}>
+              {view === 'anual' && (
+                <>
+                  <button
+                    onClick={exportToImage}
+                    style={{
+                      padding: '10px 20px',
+                      border: 'none',
+                      background: 'rgba(255,255,255,0.25)',
+                      color: 'rgba(255,255,255,0.9)',
+                      borderRadius: '10px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontFamily: 'inherit',
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.35)'}
+                    onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.25)'}
+                  >🖼️ Imagen</button>
+                  <button
+                    onClick={exportToPDF}
+                    style={{
+                      padding: '10px 20px',
+                      border: 'none',
+                      background: 'rgba(255,255,255,0.25)',
+                      color: 'rgba(255,255,255,0.9)',
+                      borderRadius: '10px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontFamily: 'inherit',
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.35)'}
+                    onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.25)'}
+                  >📑 PDF</button>
+                </>
+              )}
+              <button
+                onClick={exportToHTML}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.25)',
+                  color: 'rgba(255,255,255,0.9)',
+                  borderRadius: '10px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.35)'}
+                onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.25)'}
+              >📄 HTML</button>
+              <button
+                onClick={exportToCSV}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.25)',
+                  color: 'rgba(255,255,255,0.9)',
+                  borderRadius: '10px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.35)'}
+                onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.25)'}
+              >📊 Excel (CSV)</button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -1042,7 +1389,7 @@ export default function DRAIDashboard() {
 
       {/* Vista Anual */}
       {informes.length > 0 && view === 'anual' && (
-        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 32px 32px' }}>
+        <div ref={reporteRef} style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 32px 32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>📈 Consolidado Anual 2025</h2>
             <span style={{ background: 'linear-gradient(135deg, #FFD54F, #FFC107)', color: '#1B5E20', padding: '6px 14px', borderRadius: '20px', fontSize: '13px', fontWeight: 600 }}>
@@ -1058,15 +1405,14 @@ export default function DRAIDashboard() {
             marginBottom: '24px'
           }}>
             {[
-              { icon: '📋', value: informes.reduce((s, i) => s + (i.area1?.subactividades?.logistico?.valor || 0), 0), label: 'Act. Logístico', color: '#1B5E20' },
-              { icon: '🎓', value: informes.reduce((s, i) => s + (i.area1?.subactividades?.academico?.valor || 0), 0), label: 'Act. Académico', color: '#2E7D32' },
-              { icon: '🏗️', value: informes.reduce((s, i) => s + (i.area1?.subactividades?.infraestructura?.valor || 0), 0), label: 'Act. Infraestructura', color: '#4CAF50' },
-              { icon: '🎥', value: informes.reduce((s, i) => s + i.videoconferencias, 0), label: 'Total Videoconferencias', color: COLORS.primary },
-              { icon: '👥', value: informes.reduce((s, i) => s + i.usuariosCENDOI, 0).toLocaleString(), label: 'Usuarios CENDOI', color: COLORS.purple },
-              { icon: '💻', value: informes.reduce((s, i) => s + i.equiposConfigurados, 0), label: 'Equipos Configurados', color: COLORS.blue },
-              { icon: '🎯', value: informes.reduce((s, i) => s + i.talentoTechMatriculas, 0), label: 'Talento Tech', color: COLORS.pink },
-              { icon: '🛒', value: informes.reduce((s, i) => s + i.comprasGestionadas, 0), label: 'Compras Gestionadas', color: COLORS.orange },
-              { icon: '📝', value: informes.reduce((s, i) => s + i.contrataciones, 0), label: 'Contrataciones', color: COLORS.indigo }
+              { icon: '📋', value: informes.reduce((s, i) => s + (i.area1?.subactividades?.logistico?.valor || 0), 0), label: 'Act. Logístico (Total)', color: '#1B5E20', type: 'sum' },
+              { icon: '🎥', value: informes.reduce((s, i) => s + i.videoconferencias, 0), label: 'Horas Videoconferencia (Total)', color: COLORS.primary, type: 'sum' },
+              { icon: '💻', value: Math.round(informes.reduce((s, i) => s + (i.proyectosActivos || 0), 0) / informes.length), label: 'Proyectos (Promedio)', color: COLORS.blue, type: 'avg' },
+              { icon: '🔧', value: informes.reduce((s, i) => s + i.equiposConfigurados, 0), label: 'Soporte Telemático (Total)', color: COLORS.teal, type: 'sum' },
+              { icon: '👥', value: Math.round(informes.reduce((s, i) => s + i.usuariosCENDOI, 0) / informes.length), label: 'Usuarios CENDOI (Prom)', color: COLORS.purple, type: 'avg' },
+              { icon: '📊', value: informes.reduce((s, i) => s + (i.reunionesUGP || 0), 0), label: 'Reuniones UGP (Total)', color: AREA_COLORS[5], type: 'sum' },
+              { icon: '🎓', value: informes.reduce((s, i) => s + (i.pqrsAtendidas || 0), 0), label: 'PQRS Ingeni@ (Total)', color: COLORS.pink, type: 'sum' },
+              { icon: '🛒', value: informes.reduce((s, i) => s + i.comprasGestionadas, 0), label: 'Compras Gestión Adm (Total)', color: COLORS.orange, type: 'sum' }
             ].map((item, i) => (
               <div key={i} style={{
                 background: `linear-gradient(135deg, ${item.color || COLORS.primary}, ${item.color || COLORS.accent})`,
@@ -1074,8 +1420,21 @@ export default function DRAIDashboard() {
                 padding: '24px',
                 textAlign: 'center',
                 color: 'white',
-                boxShadow: '0 4px 16px rgba(27,94,32,0.3)'
+                boxShadow: '0 4px 16px rgba(27,94,32,0.3)',
+                position: 'relative'
               }}>
+                {item.type === 'avg' && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    background: 'rgba(255,255,255,0.3)',
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    fontSize: '10px',
+                    fontWeight: 600
+                  }}>PROMEDIO</div>
+                )}
                 <span style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }}>{item.icon}</span>
                 <span style={{ fontSize: '32px', fontWeight: 800, display: 'block', fontFamily: 'monospace' }}>{item.value}</span>
                 <span style={{ fontSize: '12px', opacity: 0.9, marginTop: '8px', display: 'block' }}>{item.label}</span>
@@ -1108,6 +1467,7 @@ export default function DRAIDashboard() {
           </div>
 
           {/* Estadísticas por área - TODAS LAS 9 ÁREAS */}
+          
           <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px' }}>📋 Estadísticas por Área (9 Áreas Completas)</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
             {[
@@ -1115,15 +1475,16 @@ export default function DRAIDashboard() {
                 { l: 'Total actividades Logístico', v: informes.reduce((s, i) => s + (i.area1?.subactividades?.logistico?.valor || 0), 0) },
                 { l: 'Total actividades Académico', v: informes.reduce((s, i) => s + (i.area1?.subactividades?.academico?.valor || 0), 0) },
                 { l: 'Total actividades Infraestructura', v: informes.reduce((s, i) => s + (i.area1?.subactividades?.infraestructura?.valor || 0), 0) },
-                { l: 'Total videoconferencias', v: informes.reduce((s, i) => s + (i.videoconferencias || 0), 0) },
+                { l: 'Total horas videoconferencia', v: informes.reduce((s, i) => s + (i.videoconferencias || 0), 0) },
                 { l: 'Total streamings', v: informes.reduce((s, i) => s + (i.streamings || 0), 0) },
                 { l: 'Total grabaciones', v: informes.reduce((s, i) => s + (i.grabaciones || 0), 0) }
               ]},
               { title: '💻 2. Gestión de Sistemas de Información', icon: AREA_ICONS[1], color: AREA_COLORS[1], stats: [
-                { l: 'Total proyectos activos', v: informes.reduce((s, i) => s + (i.proyectosActivos || 0), 0) },
-                { l: 'Total HUs completadas', v: informes.reduce((s, i) => s + (i.area2?.totales?.husCompletadas || 0), 0) },
-                { l: 'Total HUs iniciadas', v: informes.reduce((s, i) => s + (i.area2?.totales?.husIniciadas || 0), 0) },
-                { l: 'Promedio proyectos/semana', v: Math.round(informes.reduce((s, i) => s + (i.proyectosActivos || 0), 0) / informes.length) }
+                { l: 'Promedio proyectos activos/semana', v: Math.round(informes.reduce((s, i) => s + (i.proyectosActivos || 0), 0) / informes.length) },
+                { l: 'Máximo proyectos simultáneos', v: Math.max(...informes.map(i => i.proyectosActivos || 0)) },
+                { l: 'Total actividades en desarrollo', v: informes.reduce((s, i) => s + (i.area2?.totales?.actividadesSistemas || 0), 0) },
+                { l: 'Promedio actividades/semana', v: Math.round(informes.reduce((s, i) => s + (i.area2?.totales?.actividadesSistemas || 0), 0) / informes.length) },
+                { l: 'Semana con mayor carga', v: Math.max(...informes.map(i => i.area2?.totales?.actividadesSistemas || 0)) + ' actividades' }
               ]},
               { title: '🔧 3. Soporte Telemático', icon: AREA_ICONS[2], color: AREA_COLORS[2], stats: [
                 { l: 'Total equipos configurados', v: informes.reduce((s, i) => s + (i.equiposConfigurados || 0), 0) },
@@ -1140,10 +1501,10 @@ export default function DRAIDashboard() {
                 { l: 'Promedio soporte/semana', v: Math.round(informes.reduce((s, i) => s + (i.area4?.totales?.soporteEmailFacultad || 0), 0) / informes.length) }
               ]},
               { title: '📚 5. Gestión Documental CENDOI', icon: AREA_ICONS[4], color: AREA_COLORS[4], stats: [
-                { l: 'Total usuarios atendidos', v: informes.reduce((s, i) => s + (i.usuariosCENDOI || 0), 0).toLocaleString() },
+                { l: 'Promedio usuarios/semana', v: Math.round(informes.reduce((s, i) => s + (i.usuariosCENDOI || 0), 0) / informes.length) },
+                { l: 'Máximo usuarios en una semana', v: Math.max(...informes.map(i => i.usuariosCENDOI || 0)) },
                 { l: 'Total préstamos libros', v: informes.reduce((s, i) => s + (i.libros || 0), 0) },
-                { l: 'Total préstamos PCs', v: informes.reduce((s, i) => s + (i.pcs || 0), 0) },
-                { l: 'Promedio usuarios/semana', v: Math.round(informes.reduce((s, i) => s + (i.usuariosCENDOI || 0), 0) / informes.length) }
+                { l: 'Total préstamos PCs', v: informes.reduce((s, i) => s + (i.pcs || 0), 0) }
               ]},
               { title: '📋 6. Unidad de Gestión de Proyectos', icon: AREA_ICONS[5], color: AREA_COLORS[5], stats: [
                 { l: 'Total reuniones', v: informes.reduce((s, i) => s + (i.reunionesUGP || 0), 0) },
@@ -1152,10 +1513,10 @@ export default function DRAIDashboard() {
                 { l: 'Promedio reuniones/semana', v: Math.round(informes.reduce((s, i) => s + (i.reunionesUGP || 0), 0) / informes.length) }
               ]},
               { title: '🎓 7. Ingeni@', icon: AREA_ICONS[6], color: AREA_COLORS[6], stats: [
-                { l: 'Total Talento Tech matrículas', v: informes.reduce((s, i) => s + (i.talentoTechMatriculas || 0), 0) },
+                { l: 'Promedio matrículas Talento Tech', v: Math.round(informes.reduce((s, i) => s + (i.talentoTechMatriculas || 0), 0) / informes.filter(i => i.talentoTechMatriculas > 0).length) || 0 },
+                { l: 'Máximo matrículas simultáneas', v: Math.max(...informes.map(i => i.talentoTechMatriculas || 0)) },
                 { l: 'Total PQRS atendidas', v: informes.reduce((s, i) => s + (i.pqrsAtendidas || 0), 0) },
-                { l: 'Total stories redes sociales', v: informes.reduce((s, i) => s + (i.area7?.totales?.storiesRedes || 0), 0) },
-                { l: 'Semanas administrativo activo', v: informes.filter(i => i.area7?.subactividades?.administrativo?.activo).length }
+                { l: 'Total stories redes sociales', v: informes.reduce((s, i) => s + (i.area7?.totales?.storiesRedes || 0), 0) }
               ]},
               { title: '🎨 8. Producción', icon: AREA_ICONS[7], color: AREA_COLORS[7], stats: [
                 { l: 'Total diseños realizados', v: informes.reduce((s, i) => s + (i.disenosRealizados || 0), 0) },
@@ -1167,6 +1528,8 @@ export default function DRAIDashboard() {
                 { l: 'Total compras gestionadas', v: informes.reduce((s, i) => s + (i.comprasGestionadas || 0), 0) },
                 { l: 'Total contrataciones', v: informes.reduce((s, i) => s + (i.contrataciones || 0), 0) },
                 { l: 'Total transferencias', v: informes.reduce((s, i) => s + (i.transferencias || 0), 0) },
+                { l: 'Total actividades SEA', v: informes.reduce((s, i) => s + (i.area9?.totales?.actividadesSEA || 0), 0) },
+                { l: 'Total actividades Varios', v: informes.reduce((s, i) => s + (i.area9?.totales?.actividadesVarios || 0), 0) },
                 { l: 'Total avales pago', v: informes.reduce((s, i) => s + (i.area9?.totales?.avalesPago || 0), 0) }
               ]}
             ].map((section, i) => (
