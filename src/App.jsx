@@ -18,7 +18,8 @@ const DATOS_DRAI = {
       'Total actividades Infraestructura': 666,
       'Total horas videoconferencia': 1288,
       'Total streamings': 99,
-      'Total grabaciones': 178
+      'Total grabaciones': 178,
+      'Servicios Aulas': 19600
     }
   },
   area2: {
