@@ -286,16 +286,16 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
   // Helper: sumar todos los números que aparecen en una sección (números después de guión, entre paréntesis, o en formato de números aislados)
   const sumarNumerosEnSeccion = (htmlFragment) => {
     if (!htmlFragment) return 0;
-    
+
     // Buscar números en múltiples formatos:
     // 1. Números después de guión: -50, -100, etc.
     const numerosGuion = htmlFragment.match(/-(\d{1,5})/g) || [];
     const sumaGuion = numerosGuion.reduce((sum, num) => sum + parseInt(num.substring(1)), 0);
-    
+
     // 2. Números entre paréntesis: (50), (100), etc.
     const numerosParentesis = htmlFragment.match(/\((\d{1,5})\)/g) || [];
     const sumaParentesis = numerosParentesis.reduce((sum, num) => sum + parseInt(num.slice(1, -1)), 0);
-    
+
     // 3. Números aislados de 2-4 dígitos (excluir años tipo 2025, 2024, etc.)
     const todoNumeros = htmlFragment.match(/\b(\d{2,4})\b/g) || [];
     const sumaAislados = todoNumeros.reduce((sum, num) => {
@@ -306,79 +306,85 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
       }
       return sum;
     }, 0);
-    
+
     // Retorna la suma total de todos los métodos
     return sumaGuion + sumaParentesis + sumaAislados;
   };
 
-  // Extraer sección de Ingeni@ para sumar números de actividades
-  const ingeniaHTML = extractHTMLSection('7. Ingeni@', '8. Producción');
+  // Helper: sumar solo números relacionados con Talento Tech
+  const sumarNumerosTalentoTech = (htmlFragment) => {
+    if (!htmlFragment) return 0;
+
+    const tempDoc = parser.parseFromString(htmlFragment, 'text/html');
+    const listItems = tempDoc.querySelectorAll('li, p, td');
+
+    let suma = 0;
+
+    listItems.forEach(item => {
+      const texto = item.textContent || '';
+      const textoLower = texto.toLowerCase();
+
+      // Solo procesar si menciona "talento tech"
+      if (textoLower.includes('talento tech')) {
+        // Buscar números después de guión al final de la línea
+        const match = texto.match(/-(\d{1,5})\s*$/);
+        if (match) {
+          const numero = parseInt(match[1]);
+          // Filtrar números absurdos (como años 2026, 2025, etc.)
+          if (numero > 0 && numero < 2000) {
+            console.log(`  ✓ Talento Tech encontrado (Semana ${weekNumber}): "${texto.substring(0, 60)}..." → ${numero}`);
+            suma += numero;
+          }
+        }
+      }
+    });
+
+    return suma;
+  };
+
+  // ============================================
+  // INGENI@ - VALORES HARDCODEADOS (FIJOS)
+  // ============================================
+  // Se usan valores fijos independientemente del contenido del informe
   
-  // Sumar números de Talento Tech (todas las menciones)
-  const talentoTechTotal = ingeniaHTML ? sumarNumerosEnSeccion(ingeniaHTML) : 0;
+  const talentoTechMatriculas = 12814;  // Total estudiantes Talento Tech (acumulado)
+  const pqrsAtendidas = 19412;          // Total PQRS atendidas
+  const pruebasInicio = 4173;           // Total pruebas inicio usuarios
+  const storiesRedes = 152;             // Total stories redes sociales
   
-  // Contar también las actividades (bullets) en Ingeni@ como indicador alternativo
-  const ingeniaActivitiesCount = ingeniaHTML ? countActivitiesInHTML(ingeniaHTML) : 0;
-  
-  // Para compatibilidad, también mantener las métricas individuales
-  // Búsqueda AGRESIVA de matrículas - múltiples patrones
-  let talentoTechMatriculas = 0;
-  
-  // Patrón 1: "Talento Tech: XXX" o "Talento Tech XXX"
-  talentoTechMatriculas = extractNumber(/Talento\s*Tech[:\s]+(\d{2,4})/i);
-  
-  // Patrón 2: "matrículas Talento Tech XXX"
-  if (!talentoTechMatriculas) {
-    talentoTechMatriculas = extractNumber(/matrículas?\s+(?:de\s+)?Talento\s*Tech[:\s]*(\d{2,4})/i);
-  }
-  
-  // Patrón 3: "XXX matrículas" o "XXX estudiantes" cerca de "Talento Tech"
-  if (!talentoTechMatriculas) {
-    const ttMatch = text.match(/Talento\s*Tech[^0-9]{0,100}(\d{2,4})\s*(?:matrículas?|estudiantes?)/i);
-    if (ttMatch) talentoTechMatriculas = parseInt(ttMatch[1]);
-  }
-  
-  // Patrón 4: Buscar números grandes después de Talento Tech
-  if (!talentoTechMatriculas) {
-    const ttSection = text.substring(Math.max(0, text.indexOf('Talento Tech') - 100), Math.min(text.length, text.indexOf('Talento Tech') + 200));
-    const numbersInSection = ttSection.match(/\b(\d{3,4})\b/g);
-    if (numbersInSection) {
-      // Tomar el número más grande en la sección
-      talentoTechMatriculas = Math.max(...numbersInSection.map(n => parseInt(n)));
-    }
-  }
-  
-  // Validar rango realista: 100-2000 por semana
-  if (talentoTechMatriculas > 2000 || talentoTechMatriculas < 50) {
-    talentoTechMatriculas = 0; // Si está fuera de rango, rechazar
-  }
-  
-  const pruebasInicio = extractNumber(/pruebas de inicio[^\d]{0,15}(\d{1,4})/i) ||
-                        extractNumber(/pruebas[^\d]{0,30}(?:Talento Tech)?[^\d]{0,15}(\d{1,4})/i);
-  const storiesRedes = extractNumber(/Stories.*redes.*sociales[^\d]{0,15}(\d{1,3})/i) ||
-                       extractNumber(/stories[^\d]{0,30}redes[^\d]{0,15}(\d{1,3})/i);
+  // Valores opcionales (se pueden extraer o dejar en 0)
   const reportesHorasCatedra = extractNumber(/reportes de horas.*cátedra[^\d]{0,15}(\d{1,3})/i) ||
-                               extractNumber(/horas.*cátedra[^\d]{0,15}(\d{1,3})/i);
-  const pqrsAtendidas = extractNumber(/(?:Respuesta|Atención).*PQRS[^\d]{0,15}(\d{1,4})/i) ||
-                        extractNumber(/PQRS[^\d]{0,15}(\d{1,4})\s*(?:atendidas?|respondidas?)/i) ||
-                        extractNumber(/[Rr]espuesta.*[Pp](?:etición|QRS)[^\d]{0,15}(\d{1,4})/i);
+                               extractNumber(/horas.*cátedra[^\d]{0,15}(\d{1,3})/i) || 0;
   const acompInterventoria = extractNumber(/Acompañamiento interventoría[^\d]{0,15}(\d{1,3})/i) ||
-                             extractNumber(/interventoría[^\d]{0,15}(\d{1,3})/i);
-
-  // Usar el total sumado si es significativamente mayor que la métrica individual
-  const talentoTechFinal = talentoTechTotal > 500 ? talentoTechTotal : talentoTechMatriculas;
-
-  // Validación de rangos razonables
-  const pqrsValidadas = pqrsAtendidas > 0 && pqrsAtendidas < 500 ? pqrsAtendidas : 0;
-  // Usar talentoTechMatriculas directamente si está en rango realista (300-600), sino usar talentoTechTotal
-  const matriculasValidadas = (talentoTechMatriculas >= 100 && talentoTechMatriculas <= 2000) ? talentoTechMatriculas : 
-                              (talentoTechTotal >= 100 && talentoTechTotal <= 2000 ? talentoTechTotal : 0);
-
-  if (talentoTechMatriculas > 2000 || (talentoTechMatriculas > 0 && talentoTechMatriculas < 100)) {
-    console.warn(`⚠️ Matrículas fuera de rango realista en semana ${weekNumber}: ${talentoTechMatriculas} (esperado 100-2000) → usando fallback ${talentoTechTotal}`);
-  }
-
-  console.log(`📊 Ingeni@ (Semana ${weekNumber}): PQRS=${pqrsValidadas}, TalentoTechMatriculas=${talentoTechMatriculas}, TalentoTechTotal=${talentoTechTotal}, Final=${matriculasValidadas}, Stories=${storiesRedes}`);
+                             extractNumber(/interventoría[^\d]{0,15}(\d{1,3})/i) || 0;
+  
+  // ============================================
+  // ACTIVIDADES INGENI@ - VALORES HARDCODEADOS (FIJOS)
+  // ============================================
+  // Lista de actividades específicas de Ingeni@
+  const ingeniaActivitiesList = [
+    'ACOFI',
+    'EXPERIENCIA TECH',
+    'FERIA EMPLEABILIDAD CUARTA BRIGADA',
+    'FERIA EDUCATIVA COMPAÑIA DE SANIDAD COLOMBIA 4.0',
+    'FERIA EDUCATIVA CONACED',
+    'FERIA CAMINO A LA U',
+    'FERIA DE TALENTOS UDEA',
+    '2 COHORTES AVA',
+    '3 CURSOS ACTIVOS DE INGENI@',
+    '2 COHORTES FORMACION SAPIENCIA'
+  ];
+  
+  // El total de actividades es el número de items en la lista
+  const ingeniaActivitiesCount = ingeniaActivitiesList.length; // 10 actividades
+  
+  console.log(`📊 Ingeni@ (Semana ${weekNumber}) - VALORES FIJOS:`);
+  console.log(`   - Matrículas: ${talentoTechMatriculas}`);
+  console.log(`   - PQRS: ${pqrsAtendidas}`);
+  console.log(`   - Pruebas inicio: ${pruebasInicio}`);
+  console.log(`   - Stories: ${storiesRedes}`);
+  console.log(`   - Actividades: ${ingeniaActivitiesCount}`);
+  console.log(`   - Lista de actividades: ${ingeniaActivitiesList.join(', ')}`);
 
   // ============================================
   // 8. PRODUCCIÓN
@@ -570,13 +576,12 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
         proyectoCGR: { nombre: 'Proyecto CGR-Administrativo', activo: ingeniaActividades.proyectoCGR }
       },
       totales: { 
-        talentoTechMatriculas: matriculasValidadas, 
-        talentoTechTotal, 
+        talentoTechMatriculas, 
         actividadesTotales: ingeniaActivitiesCount,
         pruebasInicio, 
         storiesRedes, 
         reportesHorasCatedra, 
-        pqrsAtendidas: pqrsValidadas, 
+        pqrsAtendidas, 
         acompInterventoria 
       }
     },
@@ -621,8 +626,8 @@ const parseInformeDRAI = (htmlContent, weekNumber) => {
     pcs,
     diademas,
     reunionesUGP,
-    talentoTechMatriculas: matriculasValidadas,
-    pqrsAtendidas: pqrsValidadas,
+    talentoTechMatriculas,
+    pqrsAtendidas,
     disenosRealizados,
     comprasGestionadas,
     contrataciones,
@@ -1492,9 +1497,9 @@ export default function DRAIDashboard() {
               { icon: '🎥', value: informes.reduce((s, i) => s + i.videoconferencias, 0), label: 'Horas Videoconferencia (Total)', color: COLORS.primary, type: 'sum' },
               { icon: '💻', value: Math.round(informes.reduce((s, i) => s + (i.proyectosActivos || 0), 0) / informes.length), label: 'Proyectos (Promedio)', color: COLORS.blue, type: 'avg' },
               { icon: '🔧', value: informes.reduce((s, i) => s + i.equiposConfigurados, 0), label: 'Soporte Telemático (Total)', color: COLORS.teal, type: 'sum' },
-              { icon: '👥', value: Math.round(informes.reduce((s, i) => s + i.usuariosCENDOI, 0) / informes.length), label: 'Usuarios CENDOI (Prom)', color: COLORS.purple, type: 'avg' },
+                           { icon: '👥', value: Math.round(informes.reduce((s, i) => s + i.usuariosCENDOI, 0) / informes.length), label: 'Usuarios CENDOI (Prom)', color: COLORS.purple, type: 'avg' },
               { icon: '📊', value: informes.reduce((s, i) => s + (i.reunionesUGP || 0), 0), label: 'Reuniones UGP (Total)', color: AREA_COLORS[5], type: 'sum' },
-              { icon: '🎓', value: informes.reduce((s, i) => s + (i.pqrsAtendidas || 0), 0), label: 'PQRS Ingeni@ (Total)', color: COLORS.pink, type: 'sum' },
+              { icon: '🎓', value: 19412, label: 'PQRS Ingeni@ (Total)', color: COLORS.pink, type: 'fixed' },
               { icon: '🛒', value: informes.reduce((s, i) => s + i.comprasGestionadas, 0), label: 'Compras Gestión Adm (Total)', color: COLORS.orange, type: 'sum' }
             ].map((item, i) => (
               <div key={i} style={{
@@ -1596,12 +1601,11 @@ export default function DRAIDashboard() {
                 { l: 'Promedio reuniones/semana', v: Math.round(informes.reduce((s, i) => s + (i.reunionesUGP || 0), 0) / informes.length) }
               ]},
               { title: '🎓 7. Ingeni@', icon: AREA_ICONS[6], color: AREA_COLORS[6], stats: [
-                { l: 'Total estudiantes Talento Tech (acumulado)', v: informes.reduce((s, i) => s + (i.talentoTechMatriculas || 0), 0) },
-                { l: 'Promedio matrículas/semana', v: Math.round(informes.reduce((s, i) => s + (i.talentoTechMatriculas || 0), 0) / Math.max(informes.length, 1)) },
-                { l: 'Total actividades Ingeni@', v: informes.reduce((s, i) => s + (i.area7?.totales?.actividadesTotales || 0), 0) },
-                { l: 'Total PQRS atendidas', v: informes.reduce((s, i) => s + (i.area7?.totales?.pqrsAtendidas || 0), 0) },
-                { l: 'Total stories redes sociales', v: informes.reduce((s, i) => s + (i.area7?.totales?.storiesRedes || 0), 0) },
-                { l: 'Total pruebas inicio usuarios', v: informes.reduce((s, i) => s + (i.area7?.totales?.pruebasInicio || 0), 0) }
+                { l: 'Total estudiantes Talento Tech (acumulado)', v: 12814 },
+                { l: 'Total PQRS atendidas', v: 19412 },
+                { l: 'Total pruebas inicio usuarios', v: 4173 },
+                { l: 'Total stories redes sociales', v: 152 },
+                { l: 'Total actividades Ingeni@', v: informes.reduce((s, i) => s + (i.area7?.totales?.actividadesTotales || 0), 0) }
               ]},
               { title: '🎨 8. Producción', icon: AREA_ICONS[7], color: AREA_COLORS[7], stats: [
                 { l: 'Total diseños realizados', v: informes.reduce((s, i) => s + (i.disenosRealizados || 0), 0) },
