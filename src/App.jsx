@@ -104,7 +104,7 @@ const DATOS_DRAI = {
     color: '#FF5722',
     datos: {
       'Videoconferencias Meets + Zooms (3114 horas sesiones)': 1526,
-      'Productos realizados (videos y piezas gráficas)': 18,
+      'Productos realizados (videos y piezas gráficas)': 180,
       'Videos de apoyo comunicación interna redes sociales': 28,
       'Transmisiones en vivo YouTube y Facebook': 59,
       'Acompañamiento virtual visita pares académicos': 1,
