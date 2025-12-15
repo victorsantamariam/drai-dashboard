@@ -365,49 +365,60 @@ export default function DRAIDashboard() {
             )}
             
             {chartType === 'pie' && (
-              <div style={{ display: 'flex', flexDirection: window.innerWidth < 1024 ? 'column' : 'row', alignItems: 'center', gap: '24px', justifyContent: 'center' }}>
-                <PieChart width={window.innerWidth < 768 ? 300 : 400} height={window.innerWidth < 768 ? 300 : 400}>
-                  <Pie
-                    data={getChartData()}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={false}
-                    outerRadius={window.innerWidth < 768 ? 100 : 130}
-                    fill="#8884d8"
-                    dataKey="total"
-                  >
-                    {getChartData().map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS_PALETTE[index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    formatter={(value, name, props) => [
-                      `${value.toLocaleString()} actividades (${(props.payload.percent * 100).toFixed(1)}%)`,
-                      props.payload.nombre
-                    ]}
-                  />
-                </PieChart>
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column',
+                alignItems: 'center', 
+                gap: '20px', 
+                width: '100%'
+              }}>
+                {/* Gráfico de Torta */}
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                  <PieChart width={window.innerWidth < 768 ? Math.min(window.innerWidth - 80, 280) : 380} height={window.innerWidth < 768 ? Math.min(window.innerWidth - 80, 280) : 380}>
+                    <Pie
+                      data={getChartData()}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={false}
+                      outerRadius={window.innerWidth < 768 ? Math.min((window.innerWidth - 80) / 2.5, 110) : 140}
+                      fill="#8884d8"
+                      dataKey="total"
+                    >
+                      {getChartData().map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS_PALETTE[index]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: window.innerWidth < 768 ? '11px' : '13px' }}
+                      formatter={(value, name, props) => [
+                        `${value.toLocaleString()} actividades (${(props.payload.percent * 100).toFixed(1)}%)`,
+                        props.payload.nombre
+                      ]}
+                    />
+                  </PieChart>
+                </div>
                 
                 {/* Leyenda personalizada con todas las áreas */}
                 <div style={{ 
                   display: 'grid', 
-                  gridTemplateColumns: window.innerWidth < 768 ? '1fr' : 'repeat(2, 1fr)',
-                  gap: '12px',
-                  padding: '16px',
+                  gridTemplateColumns: window.innerWidth < 640 ? '1fr' : window.innerWidth < 1024 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+                  gap: window.innerWidth < 768 ? '8px' : '12px',
+                  padding: window.innerWidth < 768 ? '12px' : '16px',
                   background: '#f9f9f9',
                   borderRadius: '12px',
-                  maxWidth: window.innerWidth < 768 ? '100%' : '400px'
+                  width: '100%',
+                  maxWidth: window.innerWidth < 768 ? '100%' : '900px'
                 }}>
                   <div style={{ 
-                    gridColumn: window.innerWidth < 768 ? '1' : '1 / -1',
-                    fontSize: '14px', 
+                    gridColumn: '1 / -1',
+                    fontSize: window.innerWidth < 768 ? '13px' : '14px', 
                     fontWeight: 700, 
                     color: '#1B5E20',
                     marginBottom: '8px',
                     borderBottom: '2px solid #1B5E20',
-                    paddingBottom: '8px'
+                    paddingBottom: '8px',
+                    textAlign: 'center'
                   }}>
                     📊 Todas las Áreas DRAI
                   </div>
@@ -419,42 +430,41 @@ export default function DRAIDashboard() {
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: '8px',
-                        padding: '8px',
+                        padding: window.innerWidth < 768 ? '10px' : '12px',
                         background: 'white',
                         borderRadius: '8px',
                         border: `2px solid ${COLORS_PALETTE[index]}20`,
                         transition: 'all 0.3s'
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateX(4px)';
-                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateX(0)';
+                        e.currentTarget.style.transform = 'translateY(0)';
                         e.currentTarget.style.boxShadow = 'none';
                       }}
                       >
                         <div style={{ 
-                          width: '16px', 
-                          height: '16px', 
+                          width: window.innerWidth < 768 ? '14px' : '16px', 
+                          height: window.innerWidth < 768 ? '14px' : '16px', 
                           background: COLORS_PALETTE[index],
                           borderRadius: '4px',
                           flexShrink: 0
                         }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ 
-                            fontSize: '11px', 
+                            fontSize: window.innerWidth < 768 ? '10px' : '11px', 
                             fontWeight: 600, 
                             color: '#333',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
+                            lineHeight: '1.3'
                           }}>
                             {area.nombre}
                           </div>
                           <div style={{ 
-                            fontSize: '10px', 
-                            color: '#666'
+                            fontSize: window.innerWidth < 768 ? '9px' : '10px', 
+                            color: '#666',
+                            marginTop: '2px'
                           }}>
                             {percent}% • {area.total.toLocaleString()}
                           </div>
