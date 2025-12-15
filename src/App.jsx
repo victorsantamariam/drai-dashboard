@@ -128,7 +128,6 @@ const DATOS_DRAI = {
       'Caja de herramientas - 3 videos': 3,
       'Caja de herramientas - 2 lecturas': 2,
       'Acompañamiento pedagógico y metodológico': 1,
-      'Videos de apoyo a las unidades': 40,
       'Simposio Atmoscol - 1 página web': 1,
       'Simposio Atmoscol - 4 páginas web adicionales': 3,
       'Simposio Atmoscol - piezas gráficas': 40,
