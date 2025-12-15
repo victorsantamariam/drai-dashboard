@@ -102,12 +102,12 @@ const DATOS_DRAI = {
     icon: '🎨',
     color: '#FF5722',
     datos: {
-      'Videoconferencias (Meets y Zooms)': 5,
+      'Videoconferencias Meets + Zooms (3114 horas sesiones)': 1526,
       'Productos realizados (videos y piezas gráficas)': 18,
-      'Videos de apoyo comunicación interna para redes sociales': 28,
+      'Videos de apoyo comunicación interna redes sociales': 28,
       'Transmisiones en vivo YouTube y Facebook': 59,
       'Acompañamiento virtual visita pares académicos': 1,
-      'Streamings y cubrimientos (176 horas)': 73,
+      'Streamings y cubrimientos (371 horas transmisión)': 129,
       'Cursos virtualizados Posgrados': 11,
       'Banners': 69,
       'Previews': 14,
@@ -115,8 +115,7 @@ const DATOS_DRAI = {
       'Presentaciones': 3,
       'Lecturas': 34,
       'Videos': 16,
-      'Productos proyecto CGR - libro digital e impreso': 1,
-      'Productos proyecto CGR - diagramado (202 páginas)': 1,
+      'Productos proyecto CGR - libro digital e impreso diagramado (202 páginas)': 1,
       'Curso Apache Spark con Python': 1,
       'Curso MUNDO URI (2 unidades + 150 slides)': 1,
       'Caja de herramientas': 1,
@@ -488,14 +487,32 @@ export default function DRAIDashboard() {
           padding: '16px 24px', 
           borderRadius: '12px', 
           marginBottom: '24px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '16px'
         }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: '#1B5E20' }}>
-            📋 Estadísticas por Área (9 Áreas Completas)
-          </h2>
-          <p style={{ fontSize: '13px', color: '#666', margin: '4px 0 0' }}>
-            Haga clic en cualquier área para ver el detalle completo de todas sus métricas
-          </p>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: '#1B5E20' }}>
+              📋 Estadísticas por Área (9 Áreas Completas)
+            </h2>
+            <p style={{ fontSize: '13px', color: '#666', margin: '4px 0 0' }}>
+              Haga clic en cualquier área para ver el detalle completo de todas sus métricas
+            </p>
+          </div>
+          <div style={{
+            background: '#FFC107',
+            color: '#000',
+            padding: '10px 20px',
+            borderRadius: '24px',
+            fontSize: '14px',
+            fontWeight: 700,
+            whiteSpace: 'nowrap'
+          }}>
+            47 semanas analizadas
+          </div>
         </div>
 
         {/* Grid de Áreas - Estilo Minimalista */}
