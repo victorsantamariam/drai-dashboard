@@ -147,7 +147,7 @@ const DATOS_DRAI = {
       'Total actividades SEA': 65,
       'Total actividades Varios': 41,
       'Total avales pago': 276,
-      'Total seguimiento y reporte SEA': 300,
+      'Total seguimiento y reporte SEA': 780,
       'Total aprobaciones nómina Depto': 26,
       'Total seguimiento contratos': 110
     }
