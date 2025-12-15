@@ -108,20 +108,29 @@ const DATOS_DRAI = {
       'Transmisiones en vivo YouTube y Facebook': 59,
       'Acompañamiento virtual visita pares académicos': 1,
       'Streamings y cubrimientos (371 horas transmisión)': 129,
-      'Cursos virtualizados Posgrados': 11,
+      'Cursos virtualizados Posgrados - Especialización en analítica de datos': 11,
       'Banners': 69,
       'Previews': 14,
       'Gráficos e infográficos': 28,
       'Presentaciones': 3,
       'Lecturas': 34,
-      'Videos': 16,
-      'Productos proyecto CGR - libro digital e impreso diagramado (202 páginas)': 1,
+      'Videos': 40,
+      'Productos proyecto CGR': 4,
+      'Libro digital e impreso diagramado (202 páginas)': 1,
       'Curso Apache Spark con Python': 1,
       'Curso MUNDO URI (2 unidades + 150 slides)': 1,
-      'Caja de herramientas': 1,
+      'Curso MUNDO URI - 38 infográficos': 38,
+      'Curso MUNDO URI - 6 videos': 6,
+      'Curso MUNDO URI - 14 audios': 14,
+      'Caja de herramientas - 4 banners': 4,
+      'Caja de herramientas - 3 previews': 3,
+      'Caja de herramientas - 9 infografías': 9,
+      'Caja de herramientas - 3 videos': 3,
+      'Caja de herramientas - 2 lecturas': 2,
       'Acompañamiento pedagógico y metodológico': 1,
       'Videos de apoyo a las unidades': 40,
-      'Simposio Atmoscol - página web': 1,
+      'Simposio Atmoscol - 1 página web': 1,
+      'Simposio Atmoscol - 4 páginas web adicionales': 3,
       'Simposio Atmoscol - piezas gráficas': 40,
       'Solicitudes de producción atendidas': 206,
       'Piezas digitales ACOFI y Experiencia TECH': 20
@@ -140,7 +149,7 @@ const DATOS_DRAI = {
       'Total avales pago': 276,
       'Total seguimiento y reporte SEA': 300,
       'Total aprobaciones nómina Depto': 26,
-      'Total seguimiento contratos': 0
+      'Total seguimiento contratos': 110
     }
   }
 };
