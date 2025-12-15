@@ -27,11 +27,12 @@ const DATOS_DRAI = {
     icon: '💻',
     color: '#1976D2',
     datos: {
-      'Promedio proyectos activos/semana': 10,
-      'Máximo proyectos simultáneos': 11,
+      'Promedio proyectos activos/semana': 14,
+      'Máximo proyectos simultáneos': 16,
       'Total actividades en desarrollo': 1610,
       'Promedio actividades/semana': 35,
-      'Semana con mayor carga': '56 actividades'
+      'Semana con mayor carga': '56 actividades',
+      'Soporte a Estudiantes en Aplicaciones Facultad': 1300
     }
   },
   area3: {
