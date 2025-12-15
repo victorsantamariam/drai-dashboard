@@ -341,141 +341,145 @@ export default function DRAIDashboard() {
             📈 Análisis Comparativo de Áreas
           </h2>
           
-          <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 300 : window.innerWidth < 1024 ? 350 : 400}>
-            {chartType === 'bar' && (
-              <BarChart data={getChartData()}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="nombre" tick={{ fill: '#666', fontSize: 11 }} angle={-15} textAnchor="end" height={80} />
-                <YAxis tick={{ fill: '#666', fontSize: 12 }} />
-                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                <Legend />
-                <Bar dataKey="total" name="Total Actividades" fill="#1B5E20" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            )}
-            
-            {chartType === 'line' && (
-              <LineChart data={getChartData()}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="nombre" tick={{ fill: '#666', fontSize: 11 }} angle={-15} textAnchor="end" height={80} />
-                <YAxis tick={{ fill: '#666', fontSize: 12 }} />
-                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                <Legend />
-                <Line type="monotone" dataKey="total" name="Total Actividades" stroke="#1B5E20" strokeWidth={3} dot={{ fill: '#1B5E20', r: 5 }} />
-              </LineChart>
-            )}
-            
-            {chartType === 'pie' && (
+          {chartType === 'bar' || chartType === 'line' ? (
+            <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 300 : window.innerWidth < 1024 ? 350 : 400}>
+              {chartType === 'bar' && (
+                <BarChart data={getChartData()}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="nombre" tick={{ fill: '#666', fontSize: 11 }} angle={-15} textAnchor="end" height={80} />
+                  <YAxis tick={{ fill: '#666', fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                  <Legend />
+                  <Bar dataKey="total" name="Total Actividades" fill="#1B5E20" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              )}
+              
+              {chartType === 'line' && (
+                <LineChart data={getChartData()}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="nombre" tick={{ fill: '#666', fontSize: 11 }} angle={-15} textAnchor="end" height={80} />
+                  <YAxis tick={{ fill: '#666', fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                  <Legend />
+                  <Line type="monotone" dataKey="total" name="Total Actividades" stroke="#1B5E20" strokeWidth={3} dot={{ fill: '#1B5E20', r: 5 }} />
+                </LineChart>
+              )}
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ 
+              display: 'flex', 
+              flexDirection: window.innerWidth < 1100 ? 'column' : 'row',
+              alignItems: 'flex-start', 
+              justifyContent: 'center',
+              gap: '32px', 
+              width: '100%',
+              paddingTop: '20px'
+            }}>
+              {/* Gráfico de Torta */}
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <PieChart width={window.innerWidth < 768 ? 300 : 380} height={window.innerWidth < 768 ? 300 : 380}>
+                  <Pie
+                    data={getChartData()}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={false}
+                    outerRadius={window.innerWidth < 768 ? 100 : 130}
+                    fill="#8884d8"
+                    dataKey="total"
+                  >
+                    {getChartData().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS_PALETTE[index]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      borderRadius: '12px', 
+                      border: 'none', 
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+                      fontSize: '12px',
+                      padding: '8px 12px'
+                    }}
+                    formatter={(value) => [`${value.toLocaleString()} actividades`, '']}
+                  />
+                </PieChart>
+              </div>
+              
+              {/* Leyenda personalizada */}
               <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                alignItems: 'center', 
-                gap: '20px', 
+                display: 'grid', 
+                gridTemplateColumns: window.innerWidth < 640 ? '1fr' : 'repeat(2, 1fr)',
+                gap: '10px',
+                padding: '20px',
+                background: '#f9f9f9',
+                borderRadius: '12px',
+                maxWidth: '500px',
                 width: '100%'
               }}>
-                {/* Gráfico de Torta */}
-                <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                  <PieChart width={window.innerWidth < 768 ? Math.min(window.innerWidth - 80, 280) : 380} height={window.innerWidth < 768 ? Math.min(window.innerWidth - 80, 280) : 380}>
-                    <Pie
-                      data={getChartData()}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={false}
-                      outerRadius={window.innerWidth < 768 ? Math.min((window.innerWidth - 80) / 2.5, 110) : 140}
-                      fill="#8884d8"
-                      dataKey="total"
-                    >
-                      {getChartData().map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS_PALETTE[index]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: window.innerWidth < 768 ? '11px' : '13px' }}
-                      formatter={(value, name, props) => [
-                        `${value.toLocaleString()} actividades (${(props.payload.percent * 100).toFixed(1)}%)`,
-                        props.payload.nombre
-                      ]}
-                    />
-                  </PieChart>
-                </div>
-                
-                {/* Leyenda personalizada con todas las áreas */}
                 <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: window.innerWidth < 640 ? '1fr' : window.innerWidth < 1024 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-                  gap: window.innerWidth < 768 ? '8px' : '12px',
-                  padding: window.innerWidth < 768 ? '12px' : '16px',
-                  background: '#f9f9f9',
-                  borderRadius: '12px',
-                  width: '100%',
-                  maxWidth: window.innerWidth < 768 ? '100%' : '900px'
+                  gridColumn: '1 / -1',
+                  fontSize: '15px', 
+                  fontWeight: 700, 
+                  color: '#1B5E20',
+                  marginBottom: '12px',
+                  borderBottom: '2px solid #1B5E20',
+                  paddingBottom: '8px',
+                  textAlign: 'center'
                 }}>
-                  <div style={{ 
-                    gridColumn: '1 / -1',
-                    fontSize: window.innerWidth < 768 ? '13px' : '14px', 
-                    fontWeight: 700, 
-                    color: '#1B5E20',
-                    marginBottom: '8px',
-                    borderBottom: '2px solid #1B5E20',
-                    paddingBottom: '8px',
-                    textAlign: 'center'
-                  }}>
-                    📊 Todas las Áreas DRAI
-                  </div>
-                  {getChartData().map((area, index) => {
-                    const total = getChartData().reduce((sum, a) => sum + a.total, 0);
-                    const percent = ((area.total / total) * 100).toFixed(1);
-                    return (
-                      <div key={index} style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '8px',
-                        padding: window.innerWidth < 768 ? '10px' : '12px',
-                        background: 'white',
-                        borderRadius: '8px',
-                        border: `2px solid ${COLORS_PALETTE[index]}20`,
-                        transition: 'all 0.3s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                      >
+                  📊 Todas las Áreas DRAI
+                </div>
+                {getChartData().map((area, index) => {
+                  const total = getChartData().reduce((sum, a) => sum + a.total, 0);
+                  const percent = ((area.total / total) * 100).toFixed(1);
+                  return (
+                    <div key={index} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '10px',
+                      padding: '12px',
+                      background: 'white',
+                      borderRadius: '8px',
+                      border: `2px solid ${COLORS_PALETTE[index]}`,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.02)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                    >
+                      <div style={{ 
+                        width: '18px', 
+                        height: '18px', 
+                        background: COLORS_PALETTE[index],
+                        borderRadius: '4px',
+                        flexShrink: 0
+                      }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ 
-                          width: window.innerWidth < 768 ? '14px' : '16px', 
-                          height: window.innerWidth < 768 ? '14px' : '16px', 
-                          background: COLORS_PALETTE[index],
-                          borderRadius: '4px',
-                          flexShrink: 0
-                        }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ 
-                            fontSize: window.innerWidth < 768 ? '10px' : '11px', 
-                            fontWeight: 600, 
-                            color: '#333',
-                            lineHeight: '1.3'
-                          }}>
-                            {area.nombre}
-                          </div>
-                          <div style={{ 
-                            fontSize: window.innerWidth < 768 ? '9px' : '10px', 
-                            color: '#666',
-                            marginTop: '2px'
-                          }}>
-                            {percent}% • {area.total.toLocaleString()}
-                          </div>
+                          fontSize: '11px', 
+                          fontWeight: 600, 
+                          color: '#333',
+                          marginBottom: '2px'
+                        }}>
+                          {area.nombre}
+                        </div>
+                        <div style={{ 
+                          fontSize: '10px', 
+                          color: '#666'
+                        }}>
+                          {percent}% ({area.total.toLocaleString()})
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Título de Sección */}
